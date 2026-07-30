@@ -11,7 +11,8 @@ RUN set -eux; \
 # Node.js, from Alpine's own repo (nodejs-current tracks the current stable
 # release) so `npm` and `php artisan` (needed by Wayfinder's dev-mode codegen)
 # are both available in the same container.
-RUN apk add --no-cache nodejs-current npm
+# poppler-utils provides the `pdftotext` binary that spatie/pdf-to-text shells out to.
+RUN apk add --no-cache nodejs-current npm poppler-utils
 
 # allow super user - set this if you use Composer as a
 # super user at all times like in docker containers

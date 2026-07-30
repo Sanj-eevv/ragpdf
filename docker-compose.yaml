@@ -24,6 +24,7 @@ services:
             REDIS_HOST: cache
             REDIS_PORT: ${REDIS_PORT}
             XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+            RERANK_SERVICE_URL: http://rerank:8000
         extra_hosts:
           - host.docker.internal:host-gateway
     node:
@@ -46,11 +47,11 @@ services:
             DB_PASSWORD: ${DB_PASSWORD}
         command: npm run dev
     db:
-        image: postgres:18.4-alpine
+        image: pgvector/pgvector:pg18
         volumes:
             - postgres_data:/var/lib/postgresql
         ports:
-            - '5432:6432'
+            - '5432:5432'
         restart: unless-stopped
         environment:
             POSTGRES_DB: ${DB_DATABASE}
@@ -58,6 +59,11 @@ services:
             POSTGRES_PASSWORD: ${DB_PASSWORD}
     cache:
         image: redis:8.8.1-alpine
+    rerank:
+        build:
+            dockerfile: ./rerank/Dockerfile
+        ports:
+            - '8001:8000'
 
 volumes:
     postgres_data:
