@@ -188,12 +188,13 @@ Final tally: 50 tests / 177 assertions, run 3x in a row to confirm no flakiness 
 
 ---
 
-## Phase 10 — Wrap-up
+## Phase 10 — Wrap-up ✅ done
 
-- Update `.env.example` with all new keys (Phase 0).
-- `vendor/bin/pint --dirty --format agent` after any PHP changes.
-- Confirm `docker-compose.yaml` boots cleanly end-to-end (`web`, `app`, `node`, `db` with pgvector, `cache`).
-- No README/documentation files beyond this plan unless separately requested.
+- **Real bug found and fixed**: `.env.example` still defaulted to `DB_CONNECTION=sqlite` (the original starter-kit default) with Postgres vars commented out — but this app can no longer run on SQLite at all (no vector column support, confirmed back in Phase 0). A fresh `cp .env.example .env` would have failed on the very first migration. Fixed to default to `pgsql` with working values matching `docker-compose.yaml` (`.env` doubles as docker-compose's variable-substitution file, so these need to be real values, not blank).
+- Full (non-`--dirty`) `vendor/bin/pint` pass across the whole app — only touched an unrelated pre-existing leftover (`tests/Unit/ExampleTest.php`'s trailing newline).
+- Full `docker-compose` boot check from a clean rebuild: `docker compose down` → `build` → `up -d` → verified all 5 services (`web`, `app`, `node`, `db`, `cache`) up, `vector` extension present, all 8 migrations ran clean, `pdftotext` available, all three routes (`/`, `/documents`, `/chat`) return 200, and a fresh Playwright screenshot confirms the frontend still renders with zero console errors post-rebuild. `rag_testing` (the manually-created test database from Phase 0) survived the rebuild since only the containers were recreated, not the `postgres_data` volume.
+- `npm run build` and the full Pest suite (50 tests / 177 assertions) both re-verified clean after all of the above.
+- No new README/documentation files beyond this plan and `gaps.md` (which tracks follow-ups the user asked to defer, not fix now).
 
 ---
 
