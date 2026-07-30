@@ -70,6 +70,25 @@ test('the full ingestion pipeline extracts, chunks under both strategies, and em
     Embeddings::assertGenerated(fn ($prompt) => $prompt->contains('Pneumonia'));
 });
 
+test('uploading a non-PDF file is rejected by validation', function () {
+    Bus::fake();
+    Storage::fake('local');
+
+    $file = UploadedFile::fake()->create('notes.txt', 10, 'text/plain');
+
+    $response = $this->post(route('documents.store'), ['file' => $file]);
+
+    $response->assertSessionHasErrors('file');
+    expect(Document::count())->toBe(0);
+    Bus::assertNothingDispatched();
+});
+
+test('uploading without a file is rejected by validation', function () {
+    $response = $this->post(route('documents.store'), []);
+
+    $response->assertSessionHasErrors('file');
+});
+
 test('extraction failure marks the document as failed with an error message', function () {
     Storage::fake('local');
 

@@ -175,14 +175,16 @@ A subtlety worth noting for future callers: `Promptable::prompt()` is statically
 
 ---
 
-## Phase 9 — Testing (Pest)
+## Phase 9 — Testing (Pest) ✅ done
 
-- **Ingestion**: feature test uploading a small fixture PDF, asserting jobs run (`Queue::fake()`/`Bus::fake()` for dispatch assertions, then a separate test running the jobs synchronously against a tiny sample PDF to assert chunk counts/overlap behavior for both strategies). `Embeddings::fake()` for the embedding step.
-- **Retrieval**: unit tests seeding `document_chunks` with known embeddings/content, asserting `DenseRetriever` orders by cosine distance correctly, `HybridRetriever` RRF math matches hand-computed expected scores.
-- **Generation**: `RagAnswerAgent::fake([...])` + `assertPrompted(...)`, assert prompt construction (context injection, "Information Not Found" instruction present) and token/latency capture off the response.
-- **Reranker**: `Reranking::fake()` + `assertReranked(...)`, assert re-sort + truncation logic.
-- **Evaluation**: fake each judge agent (`ContextPrecisionJudge::fake([...])` etc.), assert structured scores parse correctly and persist.
-- Run via `php artisan test --compact --filter=<Name>` per the project's test-enforcement rule — every phase above ships with its tests before moving to the next.
+Every phase above already shipped with its own tests as it was built (per the project's test-enforcement rule), so this phase was a coverage audit rather than starting from scratch. Gaps found and filled:
+
+- **`ChunkingStrategy` enum** — `tokenSize()`/`overlapTokens()` were used everywhere but never directly asserted (`tests/Unit/ChunkingStrategyTest.php`: 500→50, 1000→100 overlap).
+- **`StoreDocumentRequest` validation** — only the happy path (valid PDF) was tested; added cases rejecting a non-PDF file and a missing file (`DocumentIngestionTest`).
+- **`StoreQueryRequest` validation** — added cases for a nonexistent `document_id` and out-of-enum `chunking_strategy`/`retrieval_algorithm` values (`QueryControllerTest`).
+- **`QueryPipeline`** (extracted in Phase 8) — was only exercised transitively through `QueryController` and the `rag:evaluate` command; added a dedicated `QueryPipelineTest` covering the reranked/non-reranked branches and the no-`document_id` (search-all-documents) path directly against the service.
+
+Final tally: 50 tests / 177 assertions, run 3x in a row to confirm no flakiness (the project already hit two real flaky-test causes earlier — tied embedding vectors making retrieval order non-deterministic, and a missing `Reranking::fake()` hitting the live API — both fixed when found). Pint and PHPStan (level 7) clean throughout.
 
 ---
 

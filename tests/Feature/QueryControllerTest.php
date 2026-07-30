@@ -104,3 +104,25 @@ test('it validates the request', function () {
     $response->assertStatus(422)
         ->assertJsonValidationErrors(['question', 'chunking_strategy', 'retrieval_algorithm']);
 });
+
+test('it rejects a document_id that does not exist', function () {
+    $response = $this->postJson(route('queries.store'), [
+        'question' => 'A question',
+        'document_id' => 999999,
+        'chunking_strategy' => ChunkingStrategy::Tokens500->value,
+        'retrieval_algorithm' => RetrievalAlgorithm::Dense->value,
+    ]);
+
+    $response->assertStatus(422)->assertJsonValidationErrors(['document_id']);
+});
+
+test('it rejects a chunking_strategy or retrieval_algorithm value outside the enum', function () {
+    $response = $this->postJson(route('queries.store'), [
+        'question' => 'A question',
+        'chunking_strategy' => 'tokens_9000',
+        'retrieval_algorithm' => 'quantum',
+    ]);
+
+    $response->assertStatus(422)
+        ->assertJsonValidationErrors(['chunking_strategy', 'retrieval_algorithm']);
+});
