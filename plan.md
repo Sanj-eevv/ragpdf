@@ -101,17 +101,16 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 ---
 
-## Phase 4 — Cross-encoder re-ranking
+## Phase 4 — Cross-encoder re-ranking ✅ done
 
-- `app/Services/Retrieval/ChunkReranker.php` — thin wrapper around `Laravel\Ai\Reranking`:
+- `app/Services/Retrieval/ChunkReranker.php` — thin wrapper around `Laravel\Ai\Reranking`, backed by Jina's rerank API (`default_for_reranking => 'jina'` in `config/ai.php`, set in Phase 0):
   ```php
-  Reranking::of($retrievedChunks->pluck('content')->all())
-      ->limit(5)
-      ->rerank($question);
+  Reranking::of($contentArray)->limit(5)->rerank($question);
   ```
-  Backed by Jina's rerank API (`default_for_reranking => 'jina'` in `config/ai.php`, set in Phase 0). Maps returned documents back to their original chunk IDs/metadata (Reranking returns reordered text, not IDs, so the wrapper needs to track content → chunk mapping itself).
-- This step is toggleable (`reranked: bool`) so the eval harness can compare "with/without re-ranking" as the thesis's post-retrieval-refinement variable.
-- Test via `Reranking::fake()` / `Reranking::assertReranked(...)` (AI SDK's built-in faking support) — no HTTP mocking needed.
+  Each result is a `RankedDocument` with an `index` pointing back into the original input array — the wrapper snapshots the chunk collection to a plain PHP array first (`$chunks->values()->all()`) so it can map `$result->index` straight back to the original `DocumentChunk` model, no content-matching needed.
+- Short-circuits to an empty collection without calling the provider when given zero chunks (`Reranking::assertNothingReranked()` verifies this in tests).
+- This step is toggleable (a `reranked: bool` the caller decides whether to invoke `ChunkReranker` at all) so the eval harness can compare "with/without re-ranking" as the thesis's post-retrieval-refinement variable.
+- Tested via `Reranking::fake(fn ($prompt) => [...])` with explicit `RankedDocument` responses (the default fake shuffles order randomly, so tests supply deterministic responses) + `Reranking::assertReranked(...)` — no HTTP mocking needed.
 
 ---
 
