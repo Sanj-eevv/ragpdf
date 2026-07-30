@@ -10,6 +10,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * @property array<int, int>|null $retrieved_chunk_ids
+ */
 class Query extends Model
 {
     /** @use HasFactory<QueryFactory> */

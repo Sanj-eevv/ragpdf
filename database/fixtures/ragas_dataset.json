@@ -1,0 +1,14 @@
+[
+  {
+    "document_filename": "REPLACE_WITH_YOUR_PDF_1.pdf",
+    "question": "REPLACE: an answerable question whose answer genuinely appears in this PDF",
+    "ground_truth_answer": "REPLACE: the verified correct answer, in your own words",
+    "answerable": true
+  },
+  {
+    "document_filename": "REPLACE_WITH_YOUR_PDF_1.pdf",
+    "question": "REPLACE: a question whose answer does NOT appear anywhere in this PDF (tests the Accuracy Fallacy)",
+    "ground_truth_answer": null,
+    "answerable": false
+  }
+]

@@ -60,6 +60,8 @@ test('asking a question runs dense retrieval and persists the query', function (
 test('reranking narrows and reorders the context before generation', function () {
     $document = Document::factory()->create();
 
+    // Distinct (non-tied) embeddings so the initial dense order is deterministic:
+    // chunkA is closest to the query vector, chunkB is orthogonal (farthest).
     $chunkA = DocumentChunk::factory()->for($document)->create([
         'chunking_strategy' => ChunkingStrategy::Tokens500,
         'embedding' => queryVector(),
@@ -67,7 +69,7 @@ test('reranking narrows and reorders the context before generation', function ()
     ]);
     $chunkB = DocumentChunk::factory()->for($document)->create([
         'chunking_strategy' => ChunkingStrategy::Tokens500,
-        'embedding' => queryVector(),
+        'embedding' => [0.0, 1.0, ...array_fill(0, 1534, 0.0)],
         'content' => 'chunk B content',
     ]);
 

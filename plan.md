@@ -123,33 +123,42 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 ---
 
-## Phase 6 — Frontend (Vue 3 + Inertia)
+## Phase 6 — Frontend (Vue 3 + Inertia) ✅ done
 
 Reuse existing shadcn-style components already in `resources/js/components/ui`. New pages under `resources/js/pages/`:
 
-- **`Documents/Index.vue`** — upload form + table of documents with status badges (pending/extracting/chunking/embedding/ready/failed), polling (Inertia partial reloads) while any document is processing.
-- **`Chat/Index.vue`** — single-page chat interface:
-  - Document selector (or "all documents").
-  - Experiment controls: chunking strategy toggle (500/1000), retrieval algorithm toggle (dense/hybrid), rerank on/off checkbox — exposed directly in the UI since they're the thesis's independent variables and the whole point is to compare them interactively.
-  - Message list (question/answer), with an expandable "show retrieved context" panel per answer (chunk text + score) for transparency/debugging.
-  - Latency + token count shown per answer (small, unobtrusive — matches the "Computational Latency" dependent variable).
-- Routes: plain `web.php` entries (`documents.index`, `documents.store`, `chat.index`, `queries.store`) — no middleware groups beyond what's already global, no auth middleware at all.
-- Run `npm run build` (or confirm `composer run dev` is active) after adding pages — new Inertia pages need a build/dev-server pass to show up, per project conventions.
+- **`Documents/Index.vue`** — upload form (`useForm` + Wayfinder's `store()` action, file input with upload-progress bar) + table of documents with status badges (pending/extracting/chunking/embedding/ready/failed). Polls (`usePoll`, start/stop tied to a `hasProcessingDocuments` watcher rather than polling forever) only while something is actually processing.
+- **`Chat/Index.vue`** — single-page chat interface using Inertia v3's `useHttp` hook (standalone JSON requests, no page navigation — matches `QueryController`'s JSON response) rather than `useForm`/router, since this isn't a page visit:
+  - Document selector ("All documents" sentinel + per-document options), chunking strategy toggle, retrieval algorithm toggle, rerank checkbox — bound directly onto the `useHttp` reactive object's fields (mirrors `useForm`'s binding pattern).
+  - Local message list (question/answer) with an expandable "show retrieved context" panel per answer, latency + token counts shown per answer.
+- `ChatController@index` (new) feeds the Chat page a list of `ready`-status documents only.
+- Routes: `documents.index`/`documents.store` (existing), `chat.index` (new), `queries.store` (existing) — no auth middleware.
+- `AppSidebar.vue` nav updated with Documents/Chat links.
+
+**Bugs found via actual browser verification** (per project convention: start the dev server, drive the feature, don't just typecheck) — screenshotted with Playwright against the already-running Docker stack (`http://localhost`), since `chromium-cli` wasn't available in this environment:
+1. `resources/js/app.ts`'s `layout` option was passed as a raw component (`AppLayout`) instead of a resolver function — broke during the Phase 0 Welcome/settings cleanup. Inertia threw `defaultLayout is not a function` and the page was a **blank white screen** despite the server-rendered HTML/JSON payload looking completely correct — a good reminder that curl-level checks aren't enough for SPA pages. Fixed: `layout: () => AppLayout`.
+2. Reka UI's `SelectItem` rejects an empty-string `value` (reserved for "clear selection") — the "All documents" option used `value=""`, throwing at runtime. Fixed with an `"all"` sentinel value mapped to `null` in a computed getter/setter.
+3. `useHttp`'s actual type signature (checked directly in `node_modules/@inertiajs/vue3/types/useHttp.d.ts`) doesn't match the simplified doc examples: `.data` is a **method**, not an assignable property, and `.post()`/`.get()` take a **plain URL string**, not a Wayfinder route object — form fields are meant to be bound directly onto the returned object (`http.question`, `http.chunking_strategy`, ...), same as `useForm`. Fixed by binding fields directly and calling `store.url()`.
+- Full upload flow (select file → submit → redirect → status badge appears) verified end-to-end in the real browser, not just via Pest.
+- **Known pre-existing issue, not introduced by this work**: `vue-tsc --noEmit` reports ~119 errors across the *original* starter-kit files (e.g. `resources/js/components/ui/sidebar/*.vue` failing to import `HTMLAttributes` from `vue`) — a `vue`/`@vue/*` package dependency-resolution issue present before any of these six phases touched the frontend (confirmed: these files were untouched by any phase). It doesn't block `npm run build` (Vite doesn't type-check), only `vue-tsc`/`npm run types:check`. Left as-is per "don't change dependencies without approval."
+- **Follow-up needed**: no queue worker runs inside the `app` Docker container (it runs plain `php-fpm`, not `php artisan dev`), so uploaded documents will sit at `pending` indefinitely inside Docker until either a `queue` service is added to `docker-compose.yaml` or `php artisan queue:work` is run manually inside the container.
 
 ---
 
-## Phase 7 — RAGAS evaluation framework
+## Phase 7 — RAGAS evaluation framework ✅ done
 
-One `Laravel\Ai\Contracts\Agent` per metric under `app/Ai/Agents/Judges/` (e.g. `ContextPrecisionJudge`, `ContextRecallJudge`, `FaithfulnessJudge`, `AnswerRelevanceJudge`), each implementing `HasStructuredOutput` so scores come back as typed/validated JSON instead of hand-parsed text — following the thesis's methodology table:
+One `Laravel\Ai\Contracts\Agent` per metric under `app/Ai/Agents/Judges/` (stripped of the `make:agent --structured` scaffold's default `Conversational`/`HasTools`, same as `RagAnswerAgent`), each implementing `HasStructuredOutput` via `Illuminate\Contracts\JsonSchema\JsonSchema` so scores come back as typed/validated JSON instead of hand-parsed text — following the thesis's methodology table:
 
-- `ContextPrecisionJudge` — scores whether retrieved chunks contain necessary evidence, penalizing relevant evidence ranked low. Schema: `{score: float, reasoning: string}`.
-- `ContextRecallJudge` — computes the proportion of ground-truth facts present in retrieved text. Schema: `{score: float, missing_facts: string[]}`.
-- `FaithfulnessJudge` — extracts claims from the answer, cross-checks each against context, flags unsupported claims. Schema: `{score: float, unsupported_claims: string[]}`.
-- `AnswerRelevanceJudge` — checks the answer actually addresses the question (not just factually correct but tangential). Schema: `{score: float, reasoning: string}`.
+- `ContextPrecisionJudge` — scores whether retrieved chunks contain necessary evidence, penalizing relevant evidence ranked low. Schema: `{score: number(0-1), reasoning: string}`.
+- `ContextRecallJudge` — computes the proportion of ground-truth facts present in retrieved text. Schema: `{score: number(0-1), missing_facts: string[]}`.
+- `FaithfulnessJudge` — extracts claims from the answer, cross-checks each against context, flags unsupported claims. Schema: `{score: number(0-1), unsupported_claims: string[]}`.
+- `AnswerRelevanceJudge` — checks the answer actually addresses the question (not just factually correct but tangential). Schema: `{score: number(0-1), reasoning: string}`.
 
-All four use explicit `model: 'gpt-4o'` per the thesis (again, must be explicit — the AI SDK's OpenAI default is a newer model). `RagasEvaluator` service orchestrates the four judges and persists results (plus the full structured response for auditability) to `ragas_evaluations`, one row per `Query`.
+All four use explicit `model: 'gpt-4o'` per the thesis. `app/Services/Evaluation/RagasEvaluator.php` orchestrates the four judges and persists results (plus the full structured response for auditability) to `ragas_evaluations`, one row per `Query`. `context_recall` (and its raw response) is left `null` and the judge is never even called when no ground-truth answer is supplied — matches the column being nullable and the thesis's note that unanswerable questions may not have all four metrics.
 
-**Evaluation dataset**: `database/fixtures/ragas_dataset.json` (or `storage/app/eval/`) — 50 questions, each tagged with `document_filename`, `ground_truth_answer` (nullable for intentionally unanswerable questions), `answerable: bool`. This is a static research artifact the user (thesis author) curates by hand from the 5 chosen PDFs — not something built through the UI.
+A subtlety worth noting for future callers: `Promptable::prompt()` is statically typed to return the base `AgentResponse`, but a `HasStructuredOutput` agent always returns a `StructuredAgentResponse` (implements `ArrayAccess`/`toArray()`) at runtime — `RagasEvaluator` narrows this with an explicit `instanceof` check (throwing if it's ever not structured) rather than casting, since PHPStan can't see the polymorphism through the trait's fixed return type.
+
+**Evaluation dataset**: `database/fixtures/ragas_dataset.json` — schema in place (`document_filename`, `question`, `ground_truth_answer` nullable, `answerable: bool`) with 2 placeholder rows demonstrating the format. The real 50-question/5-PDF dataset is a research artifact only the thesis author can curate (needs real PDFs + verified answers) — tracked in `gaps.md`.
 
 ---
 
