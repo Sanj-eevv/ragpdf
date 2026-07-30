@@ -88,26 +88,16 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 ---
 
-## Phase 3 — Retrieval algorithms
+## Phase 3 — Retrieval algorithms ✅ done
 
-`app/Services/Retrieval/` :
+`app/Services/Retrieval/`:
 
-- **`DenseRetriever`** — implements Algorithm 1 using Laravel's core `whereVectorSimilarTo` query builder method (pgvector-backed, ships in `laravel/framework` 13.x — no separate package):
-  ```php
-  DocumentChunk::query()
-      ->where('chunking_strategy', $strategy)
-      ->when($documentId, fn ($q) => $q->where('document_id', $documentId))
-      ->whereVectorSimilarTo('embedding', $question) // auto-embeds the query string via the configured provider
-      ->limit(15)
-      ->get();
-  ```
-  This generates the same `ORDER BY embedding <=> ? ASC LIMIT n` SQL the thesis's Algorithm 1 specifies — just via the idiomatic query builder instead of raw SQL.
-- **`HybridRetriever`** — implements Algorithm 2 (RRF still needs custom fusion logic — no built-in RRF helper exists yet):
-  - Dense ranked list: same `whereVectorSimilarTo` query as above (Rank_Dense = position in results).
-  - Lexical ranked list: Laravel's core `whereFullText('content', $question)` for the match condition (PostgreSQL `to_tsvector`/`plainto_tsquery`, ships in `laravel/framework` 13.x) — note `whereFullText` filters but does **not** order by relevance on PostgreSQL (only MySQL/MariaDB get automatic ordering), so pair it with an explicit `orderByRaw('ts_rank(content_tsv, plainto_tsquery(...)) DESC')` to get Rank_Sparse.
-  - Fuse: for every chunk appearing in either list, `RRF_Score = 1/(k + Rank_Dense) + 1/(k + Rank_Sparse)` with `k = 60` (missing rank in one list ⇒ treat as absent, only the present term contributes). Sort descending, take Top-K.
-- Both retrievers return a common DTO: array of `{chunk_id, content, document_id, score}`.
-- `RetrievalService` (facade over both) picks the retriever based on a `retrieval_algorithm` parameter — this is the "independent variable" switch used both by the chat UI and the eval harness.
+- **`DenseRetriever`** — implements Algorithm 1 using Laravel's core `whereVectorSimilarTo` (pgvector-backed, ships in `laravel/framework` 13.x — no separate package). Important fidelity fix: the thesis's Algorithm 1 is an *unthresholded* top-K rank (`ORDER BY embedding <=> query LIMIT 15`, no relevance cutoff), but `whereVectorSimilarTo` defaults to `minSimilarity: 0.6` — overridden to `minSimilarity: -1.0` so every candidate is admitted, matching the thesis exactly (including its "irrelevant noise" weakness that Phase 4's re-ranking exists to correct).
+- **`ReciprocalRankFusion`** — pure RRF math extracted into its own class (`fuse(array $rankedIdLists, int $limit): array`, operating on plain ID arrays) so it's unit-testable independent of Eloquent/DB — no built-in RRF helper exists in the framework or AI SDK, this part is still hand-rolled.
+- **`HybridRetriever`** — implements Algorithm 2: dense ranked list (same query as `DenseRetriever`) + lexical ranked list via `whereFullText('content', $question)` for the match condition (PostgreSQL `to_tsvector`/`plainto_tsquery`) paired with an explicit `orderByRaw("ts_rank(to_tsvector('english', content), plainto_tsquery('english', ?)) DESC", [$question])` for ranking — `whereFullText` filters but does **not** order by relevance on PostgreSQL (only MySQL/MariaDB get that automatically). The two ID-ranked lists are fed into `ReciprocalRankFusion` (`k = 60`), then hydrated back into `DocumentChunk` models.
+- Both retrievers return `Illuminate\Database\Eloquent\Collection<int, DocumentChunk>` directly — no separate DTO needed, since every field a consumer needs (content, id, document_id) already lives on the model.
+- `RetrievalService` (facade over both) picks the retriever via a `match` on the `RetrievalAlgorithm` enum — this is the "independent variable" switch used both by the chat UI and the eval harness.
+- Tested with hand-computed RRF expectations (verified against the implementation, not just against itself) and real Postgres integration tests using `Embeddings::fake()` with a closure returning a fixed vector, so cosine-similarity ordering is deterministic in tests.
 
 ---
 
