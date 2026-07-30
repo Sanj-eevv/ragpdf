@@ -4,6 +4,8 @@ Source of truth: `~/Desktop/thesis draft 3.docx` ("RAG Based PDF Question Answer
 
 This plan turns the thesis architecture into a working prototype. It is intentionally the **simplest possible implementation that satisfies the thesis's experimental requirements** — no authentication, no multi-tenancy, no roles. One person uses this locally to upload PDFs, ask questions, and run the RAGAS evaluation matrix described in Chapter 3.
 
+**Architecture note (post-Phase-0 revision):** Laravel 13 ships an official first-party AI SDK (`laravel/ai`, namespace `Laravel\Ai`) plus core query-builder methods (`whereVectorSimilarTo`, `whereFullText`) that cover most of what this plan originally proposed hand-rolling. Phases 2–7 below use these instead of raw OpenAI HTTP calls and a custom Python cross-encoder sidecar — see each phase for specifics. `composer require laravel/ai` is already done; `config/ai.php` is published.
+
 ---
 
 ## 0. What the thesis requires (recap, so nothing gets lost)
@@ -32,24 +34,24 @@ This plan turns the thesis architecture into a working prototype. It is intentio
 
 - **No auth, no users table dependency.** Documents and queries are global — anyone with access to the app sees everything. (Auth scaffolding was already stripped per the last two commits — stay that way.)
 - **No login-gated queue dashboard.** Use Laravel's `database` queue driver (already configured) with a plain `php artisan queue:work`. No Horizon — the thesis mentions Horizon as a *justification* for using Laravel, but Horizon itself isn't required for a single-user prototype; the plain queue worker demonstrates the same async-ingestion property.
-- **Cross-encoder re-ranking** can't run natively in PHP. Simplest viable approach: a tiny Python **FastAPI sidecar** (`sentence-transformers`, `cross-encoder/ms-marco-MiniLM-L-6-v2`) added as one more `docker-compose` service, called over HTTP with `(query, [chunk_texts])` → relevance scores. This is the smallest possible cross-encoder implementation — one route, one model, no persistence.
+- **Cross-encoder re-ranking** uses the official `Laravel\Ai\Reranking` class backed by **Jina**'s rerank API (`default_for_reranking => 'jina'` in `config/ai.php`) rather than a self-hosted Python model — practically free at this project's scale (10M free tokens) and needs no extra container. (An earlier version of this plan built a Python FastAPI + sentence-transformers sidecar for this; it was removed once the official SDK's `Reranking` class was found to cover the same need with less infrastructure.)
 - **Chunking strategy and retrieval algorithm are request-time parameters**, not global config — every document is ingested once per chunking strategy (so both 500-token and 1000-token variants exist for the same PDF, enabling direct comparison), and every query picks its retrieval algorithm + rerank on/off at call time.
 - **Evaluation dataset lives in a JSON fixture**, not a UI-managed table — it's a fixed research artifact (50 questions / 5 PDFs), not something a user edits through the app.
 - **Results reporting** is a simple Artisan command that dumps a CSV/table — not a dashboard with charts. A prototype needs the numbers, not visualization polish.
 
 ---
 
-## Phase 0 — Infrastructure
+## Phase 0 — Infrastructure ✅ done
 
-**Goal:** environment can store vectors, extract PDF text, and call OpenAI.
+**Goal:** environment can store vectors, extract PDF text, and call AI providers.
 
-- Swap `db` image in `docker-compose.yaml` from `postgres:18.4-alpine` to `pgvector/pgvector:pg18` (or `ankane/pgvector` equivalent) so the `vector` extension is available.
-- Add `poppler-utils` to `php/Dockerfile` (`apk add --no-cache poppler-utils`) — this provides the `pdftotext` binary that `spatie/pdf-to-text` shells out to.
-- Add a new `rerank` service to `docker-compose.yaml`: small Python image running FastAPI + `sentence-transformers`, exposing `POST /rerank`.
-- Composer additions: `spatie/pdf-to-text`, `openai-php/client` (or raw `Illuminate\Http\Client` calls to OpenAI — prefer raw HTTP client to avoid an extra dependency if the SDK feels heavy; decide during implementation based on ergonomics).
-- New `.env` keys: `OPENAI_API_KEY`, `OPENAI_EMBEDDING_MODEL=text-embedding-3-small`, `OPENAI_CHAT_MODEL=gpt-3.5-turbo`, `OPENAI_JUDGE_MODEL=gpt-4o`, `RERANK_SERVICE_URL=http://rerank:8000`.
-- `php artisan migrate` should run `CREATE EXTENSION IF NOT EXISTS vector` (in a migration, not manually).
-- Verify: `docker compose up`, confirm Postgres has `vector` extension, `pdftotext -v` works inside the `app` container, rerank service responds to a health check.
+- Swapped `db` image in `docker-compose.yaml` from `postgres:18.4-alpine` to `pgvector/pgvector:pg18` so the `vector` extension is available. (Also fixed a pre-existing bug: the port mapping was `5432:6432`, which pointed the host port at a container port nothing listened on.)
+- Added `poppler-utils` to `php/Dockerfile` — provides the `pdftotext` binary that `spatie/pdf-to-text` shells out to.
+- Composer: `spatie/pdf-to-text` (PDF extraction) and **`laravel/ai`** (official AI SDK — see architecture note above; supersedes the originally-planned raw OpenAI HTTP client and Python rerank sidecar).
+- `config/ai.php` published; `default_for_reranking` set to `jina`. `.env` keys: `OPENAI_API_KEY`, `JINA_API_KEY`.
+- New migration `enable_pgvector_extension` runs `CREATE EXTENSION IF NOT EXISTS vector`.
+- **Test infra**: `phpunit.xml` switched from in-memory SQLite to a real Postgres database (`rag_testing`, pgvector enabled) — SQLite can't represent vector columns at all, and every phase from here on needs real Postgres-specific schema.
+- Verified: stack rebuilt and up, `pdftotext` works in the `app` container, `vector` extension installed, migration runs clean, tests pass against real Postgres.
 
 ---
 
@@ -80,7 +82,7 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 - Job chain (all in `app/Jobs/`), chained via `Bus::chain` so failures surface cleanly on the `Document`:
   1. `ExtractDocumentTextJob` — runs `spatie/pdf-to-text` to get raw text, stores it (e.g., a `raw_text` disk file or column), sets `status: chunking`.
   2. `ChunkDocumentJob` — for **each** chunking strategy (500-token and 1000-token), runs a `RecursiveCharacterTextSplitter` (new `app/Services/TextSplitter.php`): split by paragraph → line → sentence → character, with ~10% overlap, until each chunk is within its token budget (token counting via a simple approximation or `tiktoken`-equivalent — decide a lightweight approach, e.g. `str_word_count`-based estimate or a PHP BPE tokenizer library if one exists cheaply). Persists `DocumentChunk` rows for both strategies. Sets `status: embedding`.
-  3. `EmbedChunksJob` — batches chunk content to OpenAI `text-embedding-3-small`, writes back `embedding` vectors. Sets `status: ready` (or `failed` with `error_message` on exception).
+  3. `EmbedChunksJob` — batches chunk content through `Laravel\Ai\Embeddings::for($texts)->generate()` (OpenAI `text-embedding-3-small`, 1536 dims — the AI SDK's OpenAI default, matches the thesis exactly), writes back `embedding` vectors. Sets `status: ready` (or `failed` with `error_message` on exception).
 - `DocumentController@index`/`show`: list documents with status (for the upload UI to poll/display progress).
 - Keep this simple: no retry-with-backoff tuning beyond Laravel's defaults, no per-page progress bars — status enum is enough for a prototype.
 
@@ -90,19 +92,19 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 `app/Services/Retrieval/` :
 
-- **`DenseRetriever`** — implements Algorithm 1 exactly as specified: embed the query (OpenAI), then
-  ```sql
-  SELECT id, document_id, content,
-         (1 - (embedding <=> :query_vector)) AS similarity_score
-  FROM document_chunks
-  WHERE chunking_strategy = :strategy
-    AND (:document_id IS NULL OR document_id = :document_id)
-  ORDER BY embedding <=> :query_vector ASC
-  LIMIT 15;
+- **`DenseRetriever`** — implements Algorithm 1 using Laravel's core `whereVectorSimilarTo` query builder method (pgvector-backed, ships in `laravel/framework` 13.x — no separate package):
+  ```php
+  DocumentChunk::query()
+      ->where('chunking_strategy', $strategy)
+      ->when($documentId, fn ($q) => $q->where('document_id', $documentId))
+      ->whereVectorSimilarTo('embedding', $question) // auto-embeds the query string via the configured provider
+      ->limit(15)
+      ->get();
   ```
-- **`HybridRetriever`** — implements Algorithm 2:
-  - Run the dense query above to get a ranked list (Rank_Dense).
-  - Run a lexical query: `ts_rank(content_tsv, plainto_tsquery('english', :question))` ordered descending, same `chunking_strategy`/`document_id` filters (Rank_Sparse).
+  This generates the same `ORDER BY embedding <=> ? ASC LIMIT n` SQL the thesis's Algorithm 1 specifies — just via the idiomatic query builder instead of raw SQL.
+- **`HybridRetriever`** — implements Algorithm 2 (RRF still needs custom fusion logic — no built-in RRF helper exists yet):
+  - Dense ranked list: same `whereVectorSimilarTo` query as above (Rank_Dense = position in results).
+  - Lexical ranked list: Laravel's core `whereFullText('content', $question)` for the match condition (PostgreSQL `to_tsvector`/`plainto_tsquery`, ships in `laravel/framework` 13.x) — note `whereFullText` filters but does **not** order by relevance on PostgreSQL (only MySQL/MariaDB get automatic ordering), so pair it with an explicit `orderByRaw('ts_rank(content_tsv, plainto_tsquery(...)) DESC')` to get Rank_Sparse.
   - Fuse: for every chunk appearing in either list, `RRF_Score = 1/(k + Rank_Dense) + 1/(k + Rank_Sparse)` with `k = 60` (missing rank in one list ⇒ treat as absent, only the present term contributes). Sort descending, take Top-K.
 - Both retrievers return a common DTO: array of `{chunk_id, content, document_id, score}`.
 - `RetrievalService` (facade over both) picks the retriever based on a `retrieval_algorithm` parameter — this is the "independent variable" switch used both by the chat UI and the eval harness.
@@ -111,17 +113,24 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 ## Phase 4 — Cross-encoder re-ranking
 
-- Python sidecar (`rerank/` new top-level dir, mirroring `nginx/`/`php/`): FastAPI app, one endpoint `POST /rerank { query: string, candidates: [{id, text}] } → [{id, score}]`, using `cross-encoder/ms-marco-MiniLM-L-6-v2` from `sentence-transformers`. Dockerfile installs `fastapi`, `uvicorn`, `sentence-transformers`, `torch` (CPU).
-- `app/Services/Retrieval/CrossEncoderReranker.php` — Laravel HTTP client call to the sidecar, takes the Top-K from dense/hybrid retrieval, re-sorts by returned score, truncates to a smaller final K (e.g. top 5) before handing to the generator.
+- `app/Services/Retrieval/ChunkReranker.php` — thin wrapper around `Laravel\Ai\Reranking`:
+  ```php
+  Reranking::of($retrievedChunks->pluck('content')->all())
+      ->limit(5)
+      ->rerank($question);
+  ```
+  Backed by Jina's rerank API (`default_for_reranking => 'jina'` in `config/ai.php`, set in Phase 0). Maps returned documents back to their original chunk IDs/metadata (Reranking returns reordered text, not IDs, so the wrapper needs to track content → chunk mapping itself).
 - This step is toggleable (`reranked: bool`) so the eval harness can compare "with/without re-ranking" as the thesis's post-retrieval-refinement variable.
+- Test via `Reranking::fake()` / `Reranking::assertReranked(...)` (AI SDK's built-in faking support) — no HTTP mocking needed.
 
 ---
 
 ## Phase 5 — Answer generation
 
-- `app/Services/AnswerGenerator.php`: builds the final prompt — system instruction enforcing "answer only from the provided context; if the answer isn't in the context, respond exactly 'Information Not Found'" — injects the (re-ranked) context chunks, calls OpenAI `gpt-3.5-turbo` chat completion.
-- Captures `prompt_tokens`, `completion_tokens`, and wall-clock latency; returns them alongside the answer so the calling controller/command can persist a `Query` row.
-- `QueryController@store` (chat endpoint): accepts `question`, `document_id` (nullable), `chunking_strategy`, `retrieval_algorithm`, `reranked` — runs retrieval → (optional) rerank → generation → persists `Query` → returns the answer + retrieved chunks (for UI transparency) via Inertia/JSON.
+- `app/Ai/Agents/RagAnswerAgent.php` (via `php artisan make:agent`): implements `Laravel\Ai\Contracts\Agent`, uses the `Promptable` trait. `instructions()` returns the system prompt enforcing "answer only from the provided context; if the answer isn't in the context, respond exactly 'Information Not Found'". Prompted with the question + injected (re-ranked) context chunks, explicit `model: 'gpt-3.5-turbo'` per the thesis (the AI SDK's OpenAI default is a newer model, so this must be passed explicitly rather than relying on the provider default).
+- The `AgentResponse` already carries token usage and timing — no need to hand-roll latency/token capture; read them off the response to persist on the `Query` row.
+- `QueryController@store` (chat endpoint): accepts `question`, `document_id` (nullable), `chunking_strategy`, `retrieval_algorithm`, `reranked` — runs retrieval → (optional) rerank → `RagAnswerAgent` → persists `Query` → returns the answer + retrieved chunks (for UI transparency) via Inertia/JSON.
+- Test via `RagAnswerAgent::fake([...])` / `assertPrompted(...)` — no HTTP mocking needed.
 
 ---
 
@@ -142,14 +151,14 @@ Reuse existing shadcn-style components already in `resources/js/components/ui`. 
 
 ## Phase 7 — RAGAS evaluation framework
 
-`app/Services/Evaluation/RagasEvaluator.php` — one method per metric, each a GPT-4o prompt (`OPENAI_JUDGE_MODEL`) following the thesis's methodology table:
+One `Laravel\Ai\Contracts\Agent` per metric under `app/Ai/Agents/Judges/` (e.g. `ContextPrecisionJudge`, `ContextRecallJudge`, `FaithfulnessJudge`, `AnswerRelevanceJudge`), each implementing `HasStructuredOutput` so scores come back as typed/validated JSON instead of hand-parsed text — following the thesis's methodology table:
 
-- `contextPrecision(question, retrievedChunks)` — judge scores whether retrieved chunks contain necessary evidence, penalizing relevant evidence ranked low.
-- `contextRecall(retrievedChunks, groundTruthAnswer)` — judge computes the proportion of ground-truth facts present in retrieved text.
-- `faithfulness(generatedAnswer, retrievedChunks)` — judge extracts claims from the answer, cross-checks each against context, flags unsupported claims.
-- `answerRelevance(question, generatedAnswer)` — judge checks the answer actually addresses the question (not just factually correct but tangential).
+- `ContextPrecisionJudge` — scores whether retrieved chunks contain necessary evidence, penalizing relevant evidence ranked low. Schema: `{score: float, reasoning: string}`.
+- `ContextRecallJudge` — computes the proportion of ground-truth facts present in retrieved text. Schema: `{score: float, missing_facts: string[]}`.
+- `FaithfulnessJudge` — extracts claims from the answer, cross-checks each against context, flags unsupported claims. Schema: `{score: float, unsupported_claims: string[]}`.
+- `AnswerRelevanceJudge` — checks the answer actually addresses the question (not just factually correct but tangential). Schema: `{score: float, reasoning: string}`.
 
-Each method returns a float score (and stores the raw judge response for auditability) — persisted to `ragas_evaluations`, one row per `Query`.
+All four use explicit `model: 'gpt-4o'` per the thesis (again, must be explicit — the AI SDK's OpenAI default is a newer model). `RagasEvaluator` service orchestrates the four judges and persists results (plus the full structured response for auditability) to `ragas_evaluations`, one row per `Query`.
 
 **Evaluation dataset**: `database/fixtures/ragas_dataset.json` (or `storage/app/eval/`) — 50 questions, each tagged with `document_filename`, `ground_truth_answer` (nullable for intentionally unanswerable questions), `answerable: bool`. This is a static research artifact the user (thesis author) curates by hand from the 5 chosen PDFs — not something built through the UI.
 
@@ -169,11 +178,11 @@ Each method returns a float score (and stores the raw judge response for auditab
 
 ## Phase 9 — Testing (Pest)
 
-- **Ingestion**: feature test uploading a small fixture PDF, asserting jobs run (`Queue::fake()`/`Bus::fake()` for dispatch assertions, then a separate test running the jobs synchronously against a tiny sample PDF to assert chunk counts/overlap behavior for both strategies).
+- **Ingestion**: feature test uploading a small fixture PDF, asserting jobs run (`Queue::fake()`/`Bus::fake()` for dispatch assertions, then a separate test running the jobs synchronously against a tiny sample PDF to assert chunk counts/overlap behavior for both strategies). `Embeddings::fake()` for the embedding step.
 - **Retrieval**: unit tests seeding `document_chunks` with known embeddings/content, asserting `DenseRetriever` orders by cosine distance correctly, `HybridRetriever` RRF math matches hand-computed expected scores.
-- **Generation**: `Http::fake()` OpenAI responses, assert prompt construction (context injection, "Information Not Found" instruction present) and token/latency capture.
-- **Reranker**: `Http::fake()` the sidecar call, assert re-sort + truncation logic.
-- **Evaluation**: `Http::fake()` GPT-4o judge responses, assert each RAGAS metric method parses scores correctly and persists.
+- **Generation**: `RagAnswerAgent::fake([...])` + `assertPrompted(...)`, assert prompt construction (context injection, "Information Not Found" instruction present) and token/latency capture off the response.
+- **Reranker**: `Reranking::fake()` + `assertReranked(...)`, assert re-sort + truncation logic.
+- **Evaluation**: fake each judge agent (`ContextPrecisionJudge::fake([...])` etc.), assert structured scores parse correctly and persist.
 - Run via `php artisan test --compact --filter=<Name>` per the project's test-enforcement rule — every phase above ships with its tests before moving to the next.
 
 ---
@@ -182,7 +191,7 @@ Each method returns a float score (and stores the raw judge response for auditab
 
 - Update `.env.example` with all new keys (Phase 0).
 - `vendor/bin/pint --dirty --format agent` after any PHP changes.
-- Confirm `docker-compose.yaml` boots cleanly end-to-end (`web`, `app`, `node`, `db` with pgvector, `cache`, new `rerank` service).
+- Confirm `docker-compose.yaml` boots cleanly end-to-end (`web`, `app`, `node`, `db` with pgvector, `cache`).
 - No README/documentation files beyond this plan unless separately requested.
 
 ---

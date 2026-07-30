@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "inertiajs/inertia-laravel": "^3.0",
+        "laravel/ai": "^0.10.1",
         "laravel/chisel": "^0.1.0",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
@@ -69,7 +70,7 @@
             "@test"
         ],
         "types:check": [
-            "phpstan analyse"
+            "phpstan analyse --memory-limit=512M"
         ],
         "test": [
             "@php artisan config:clear --ansi",
