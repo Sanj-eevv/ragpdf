@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\QueryController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Dashboard')->name('dashboard');
 
 Route::get('documents', [DocumentController::class, 'index'])->name('documents.index');
 Route::post('documents', [DocumentController::class, 'store'])->name('documents.store');
+
+Route::post('queries', [QueryController::class, 'store'])->name('queries.store');

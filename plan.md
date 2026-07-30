@@ -114,12 +114,12 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 ---
 
-## Phase 5 — Answer generation
+## Phase 5 — Answer generation ✅ done
 
-- `app/Ai/Agents/RagAnswerAgent.php` (via `php artisan make:agent`): implements `Laravel\Ai\Contracts\Agent`, uses the `Promptable` trait. `instructions()` returns the system prompt enforcing "answer only from the provided context; if the answer isn't in the context, respond exactly 'Information Not Found'". Prompted with the question + injected (re-ranked) context chunks, explicit `model: 'gpt-3.5-turbo'` per the thesis (the AI SDK's OpenAI default is a newer model, so this must be passed explicitly rather than relying on the provider default).
-- The `AgentResponse` already carries token usage and timing — no need to hand-roll latency/token capture; read them off the response to persist on the `Query` row.
-- `QueryController@store` (chat endpoint): accepts `question`, `document_id` (nullable), `chunking_strategy`, `retrieval_algorithm`, `reranked` — runs retrieval → (optional) rerank → `RagAnswerAgent` → persists `Query` → returns the answer + retrieved chunks (for UI transparency) via Inertia/JSON.
-- Test via `RagAnswerAgent::fake([...])` / `assertPrompted(...)` — no HTTP mocking needed.
+- `app/Ai/Agents/RagAnswerAgent.php` (via `php artisan make:agent`, stripped down from its `Conversational`/`HasTools` scaffold — this app needs neither: each query is independent, no tool-calling): implements `Laravel\Ai\Contracts\Agent`, uses `Promptable`. `instructions()` returns the system prompt enforcing "answer only from the provided context; if the answer isn't in the context, respond exactly 'Information Not Found'".
+- `app/Services/AnswerGenerator.php` builds the actual prompt (numbered context chunks + question) and calls `(new RagAnswerAgent)->prompt($prompt, model: 'gpt-3.5-turbo')` — explicit model, since the AI SDK's OpenAI default is a newer model than the thesis specifies. `AgentResponse->usage` carries prompt/completion tokens, but **not** wall-clock latency — that's measured by hand with `microtime(true)` around the `->prompt()` call. Returns a small `AnswerGenerationResult` readonly DTO (answer, promptTokens, completionTokens, latencyMs).
+- `QueryController@store` (chat endpoint, `POST /queries`): accepts `question`, `document_id` (nullable), `chunking_strategy`, `retrieval_algorithm`, `reranked` — runs `RetrievalService` → (optional) `ChunkReranker` → `AnswerGenerator` → persists a `Query` row → returns JSON (answer + retrieved context) rather than an Inertia response, since this is a standalone chat-style call, not a page navigation.
+- Tested via `RagAnswerAgent::fake([...])` with explicit `TextResponse(...)` instances (to control token usage) + `assertPrompted(...)`, and a full `QueryControllerTest` exercising the whole retrieval → rerank → generation → persistence chain through the actual HTTP endpoint with `Embeddings::fake()` + `Reranking::fake()` + `RagAnswerAgent::fake()` together.
 
 ---
 
