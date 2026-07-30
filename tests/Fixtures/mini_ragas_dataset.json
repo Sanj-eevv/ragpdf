@@ -1,0 +1,20 @@
+[
+  {
+    "document_filename": "test-doc.pdf",
+    "question": "How is pneumonia treated?",
+    "ground_truth_answer": "Antibiotics and rest.",
+    "answerable": true
+  },
+  {
+    "document_filename": "test-doc.pdf",
+    "question": "What is the capital of France?",
+    "ground_truth_answer": null,
+    "answerable": false
+  },
+  {
+    "document_filename": "missing-doc.pdf",
+    "question": "This document was never uploaded.",
+    "ground_truth_answer": null,
+    "answerable": false
+  }
+]

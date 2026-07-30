@@ -162,15 +162,16 @@ A subtlety worth noting for future callers: `Promptable::prompt()` is statically
 
 ---
 
-## Phase 8 — Experiment runner
+## Phase 8 — Experiment runner ✅ done
 
-`php artisan rag:evaluate` (new Artisan command, `app/Console/Commands/RunRagasEvaluation.php`):
+`php artisan rag:evaluate` (`app/Console/Commands/RunRagasEvaluation.php`, using Laravel 13's new `#[Signature]`/`#[Description]` attribute-based command style rather than the `protected $signature` property):
 
-- Loads the fixture dataset.
-- Iterates the experiment matrix: `{chunking: [500, 1000]} × {retrieval: [dense, hybrid]} × {rerank: [on, off]}` — 8 configurations (naive baseline = 500/dense/no-rerank; advanced = 1000-or-500/hybrid/rerank, whichever the data favors).
-- For each question × config: runs retrieval → rerank (if enabled) → generation → RAGAS scoring, persists `Query` + `RagasEvaluation`.
-- On completion, prints an aggregate table (mean context precision/recall/faithfulness/answer relevance/latency/tokens **per configuration**) to the console, and optionally writes a CSV to `storage/app/eval/results_{timestamp}.csv` for pulling into the thesis's results chapter.
-- Expect this to be slow/API-cost-bound (50 questions × 8 configs × several judge calls each) — support a `--configs=` filter and `--limit=` flag so partial runs are possible during development instead of always running the full matrix.
+- **Shared pipeline extracted first**: `app/Services/QueryPipeline.php` pulls the retrieval → (optional) rerank → generate → persist-`Query` sequence out of `QueryController` into its own service, since the experiment runner needs the exact same sequence — real duplication, not premature abstraction. `QueryController` now just calls it.
+- Loads the dataset from `--dataset=` (defaults to `database/fixtures/ragas_dataset.json`), resolves each entry's `document_filename` to a `Document` (must exist with `status: ready`) — skips with a console warning and continues (doesn't crash the whole batch) if not found.
+- Iterates the experiment matrix: `{chunking: [tokens_500, tokens_1000]} × {retrieval: [dense, hybrid]} × {rerank: [on, off]}` — 8 configs, each identified by a string like `tokens_500_dense_no_rerank`. `--configs=` filters to a comma-separated subset of these IDs (invalid values print the full list of valid IDs and exit non-zero); `--limit=` caps how many dataset questions run, for cheap dev iterations instead of always burning the full matrix.
+- For each question × config: runs `QueryPipeline`, then `RagasEvaluator::evaluate($query, $entry['ground_truth_answer'])` — `context_recall` is naturally `null` for the dataset's intentionally-unanswerable entries (no ground truth to compare against).
+- On completion: prints an aggregate `$this->table()` (mean context precision/recall/faithfulness/answer relevance, avg latency, avg tokens **per config**) to the console, and writes the **raw per-question-per-config** rows to a CSV (`storage/app/private/eval/results_{timestamp}.csv`) — raw rows rather than pre-aggregated, since aggregates can always be derived from raw data in a stats package but not the reverse, and the thesis will likely want real distributions/significance testing, not just means.
+- Progress bar via `$this->output->createProgressBar()` since a real 50-question × 8-config run is slow/API-cost-bound.
 
 ---
 
