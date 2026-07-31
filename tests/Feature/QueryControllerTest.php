@@ -6,10 +6,9 @@ use App\Enums\RetrievalAlgorithm;
 use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Models\Query;
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
-use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -76,9 +75,11 @@ test('reranking narrows and reorders the context before generation', function ()
     Embeddings::fake(fn () => [queryVector()]);
 
     // The reranker flips the order dense retrieval would have returned them in.
-    Reranking::fake(fn () => [
-        new RankedDocument(index: 1, document: 'chunk B content', score: 0.9),
-        new RankedDocument(index: 0, document: 'chunk A content', score: 0.4),
+    Http::fake([
+        '*/rerank' => Http::response([
+            ['index' => 1, 'document' => 'chunk B content', 'score' => 0.9],
+            ['index' => 0, 'document' => 'chunk A content', 'score' => 0.4],
+        ]),
     ]);
 
     RagAnswerAgent::fake(['An answer.']);

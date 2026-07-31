@@ -9,9 +9,9 @@ use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Models\Query as QueryModel;
 use App\Models\RagasEvaluation;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Embeddings;
-use Laravel\Ai\Reranking;
 
 beforeEach(function () {
     Storage::fake('local');
@@ -22,7 +22,17 @@ beforeEach(function () {
     ]);
 
     Embeddings::fake();
-    Reranking::fake();
+    // Echoes back whatever documents were sent, in the same order, so the
+    // reranked configs in the matrix have a valid index to map back onto
+    // regardless of how many chunks were retrieved.
+    Http::fake([
+        '*/rerank' => fn ($request) => Http::response(
+            collect($request->data()['documents'] ?? [])
+                ->values()
+                ->map(fn ($document, $index) => ['index' => $index, 'document' => $document, 'score' => 1.0])
+                ->all()
+        ),
+    ]);
     RagAnswerAgent::fake(['Antibiotics and rest.']);
     ContextPrecisionJudge::fake([['score' => 0.8, 'reasoning' => 'ok']]);
     ContextRecallJudge::fake([['score' => 0.9, 'missing_facts' => []]]);

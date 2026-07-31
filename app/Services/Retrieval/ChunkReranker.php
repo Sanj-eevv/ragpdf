@@ -4,13 +4,15 @@ namespace App\Services\Retrieval;
 
 use App\Models\DocumentChunk;
 use Illuminate\Database\Eloquent\Collection;
-use Laravel\Ai\Reranking;
+use Illuminate\Support\Facades\Http;
 
 /**
  * Post-retrieval refinement: re-ranks a Top-K set of chunks by relevance
- * using the Laravel AI SDK's Reranking class (Jina by default, configured
- * via `default_for_reranking` in config/ai.php), then truncates to a
- * smaller final K before the chunks are handed to the generator.
+ * using a self-hosted cross-encoder model (cross-encoder/ms-marco-MiniLM-L-6-v2,
+ * served by the `rerank` sidecar — see rerank/main.py), then truncates to a
+ * smaller final K before the chunks are handed to the generator. Self-hosted
+ * rather than a hosted reranking API, so this incurs no external API cost
+ * and needs no API key.
  */
 class ChunkReranker
 {
@@ -26,13 +28,18 @@ class ChunkReranker
 
         $ordered = $chunks->values()->all();
 
-        $response = Reranking::of(array_map(fn (DocumentChunk $chunk) => $chunk->content, $ordered))
-            ->limit($limit)
-            ->rerank($question);
+        $results = Http::baseUrl(config('services.rerank.url'))
+            ->post('/rerank', [
+                'query' => $question,
+                'documents' => array_map(fn (DocumentChunk $chunk) => $chunk->content, $ordered),
+                'limit' => $limit,
+            ])
+            ->throw()
+            ->json();
 
         return new Collection(array_map(
-            fn ($result) => $ordered[$result->index],
-            $response->results,
+            fn (array $result) => $ordered[$result['index']],
+            $results,
         ));
     }
 }

@@ -6,10 +6,9 @@ use App\Enums\RetrievalAlgorithm;
 use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Services\QueryPipeline;
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Embeddings;
-use Laravel\Ai\Reranking;
 use Laravel\Ai\Responses\Data\Meta;
-use Laravel\Ai\Responses\Data\RankedDocument;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TextResponse;
 
@@ -43,7 +42,7 @@ test('without reranking, it persists a Query using retrieval order and the gener
         ->and($query->completion_tokens)->toBe(7)
         ->and($chunks->pluck('id')->all())->toBe([$chunk->id]);
 
-    Reranking::assertNothingReranked();
+    Http::assertNothingSent();
 });
 
 test('with reranking, it persists a Query using the reranked order instead of retrieval order', function () {
@@ -63,9 +62,11 @@ test('with reranking, it persists a Query using the reranked order instead of re
     // Dense retrieval would rank chunkA first (closer to the query vector);
     // the reranker flips that order.
     Embeddings::fake(fn () => [[1.0, ...array_fill(0, 1535, 0.0)]]);
-    Reranking::fake(fn () => [
-        new RankedDocument(index: 1, document: 'chunk B content', score: 0.9),
-        new RankedDocument(index: 0, document: 'chunk A content', score: 0.4),
+    Http::fake([
+        '*/rerank' => Http::response([
+            ['index' => 1, 'document' => 'chunk B content', 'score' => 0.9],
+            ['index' => 0, 'document' => 'chunk A content', 'score' => 0.4],
+        ]),
     ]);
     RagAnswerAgent::fake(['An answer.']);
 

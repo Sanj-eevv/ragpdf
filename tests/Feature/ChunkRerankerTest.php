@@ -4,10 +4,10 @@ use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Services\Retrieval\ChunkReranker;
 use Illuminate\Database\Eloquent\Collection;
-use Laravel\Ai\Reranking;
-use Laravel\Ai\Responses\Data\RankedDocument;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
 
-test('reranker reorders and truncates chunks based on the provider response', function () {
+test('reranker reorders and truncates chunks based on the service response', function () {
     $document = Document::factory()->create();
 
     $chunkA = DocumentChunk::factory()->for($document)->create(['content' => 'chunk A content']);
@@ -15,10 +15,12 @@ test('reranker reorders and truncates chunks based on the provider response', fu
     $chunkC = DocumentChunk::factory()->for($document)->create(['content' => 'chunk C content']);
 
     // Input order to the reranker is [A, B, C] (indices 0, 1, 2). The fake
-    // provider says C is most relevant, A second, and B isn't returned at all.
-    Reranking::fake(fn () => [
-        new RankedDocument(index: 2, document: 'chunk C content', score: 0.9),
-        new RankedDocument(index: 0, document: 'chunk A content', score: 0.5),
+    // service says C is most relevant, A second, and B isn't returned at all.
+    Http::fake([
+        '*/rerank' => Http::response([
+            ['index' => 2, 'document' => 'chunk C content', 'score' => 0.9],
+            ['index' => 0, 'document' => 'chunk A content', 'score' => 0.5],
+        ]),
     ]);
 
     $chunks = new Collection([$chunkA, $chunkB, $chunkC]);
@@ -27,17 +29,27 @@ test('reranker reorders and truncates chunks based on the provider response', fu
 
     expect($result->pluck('id')->all())->toBe([$chunkC->id, $chunkA->id]);
 
-    Reranking::assertReranked(fn ($prompt) => $prompt->contains('chunk C')
-        && $prompt->documentsContain('chunk A content')
-        && count($prompt) === 3);
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/rerank')
+        && $request['query'] === 'a question about chunk C'
+        && $request['documents'] === ['chunk A content', 'chunk B content', 'chunk C content']
+        && $request['limit'] === 2);
 });
 
-test('reranker returns an empty collection without calling the provider when given no chunks', function () {
-    Reranking::fake();
+test('reranker returns an empty collection without calling the service when given no chunks', function () {
+    Http::fake();
 
     $result = (new ChunkReranker)->rerank(new Collection, 'a question');
 
     expect($result)->toBeEmpty();
 
-    Reranking::assertNothingReranked();
+    Http::assertNothingSent();
 });
+
+test('reranker throws when the service responds with an error', function () {
+    Http::fake(['*/rerank' => Http::response(['detail' => 'model failure'], 500)]);
+
+    $document = Document::factory()->create();
+    $chunk = DocumentChunk::factory()->for($document)->create();
+
+    (new ChunkReranker)->rerank(new Collection([$chunk]), 'a question');
+})->throws(RequestException::class);

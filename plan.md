@@ -4,7 +4,9 @@ Source of truth: `~/Desktop/thesis draft 3.docx` ("RAG Based PDF Question Answer
 
 This plan turns the thesis architecture into a working prototype. It is intentionally the **simplest possible implementation that satisfies the thesis's experimental requirements** — no authentication, no multi-tenancy, no roles. One person uses this locally to upload PDFs, ask questions, and run the RAGAS evaluation matrix described in Chapter 3.
 
-**Architecture note (post-Phase-0 revision):** Laravel 13 ships an official first-party AI SDK (`laravel/ai`, namespace `Laravel\Ai`) plus core query-builder methods (`whereVectorSimilarTo`, `whereFullText`) that cover most of what this plan originally proposed hand-rolling. Phases 2–7 below use these instead of raw OpenAI HTTP calls and a custom Python cross-encoder sidecar — see each phase for specifics. `composer require laravel/ai` is already done; `config/ai.php` is published.
+**Architecture note (post-Phase-0 revision):** Laravel 13 ships an official first-party AI SDK (`laravel/ai`, namespace `Laravel\Ai`) plus core query-builder methods (`whereVectorSimilarTo`, `whereFullText`) that cover most of what this plan originally proposed hand-rolling. Phases 2, 3, 5, 7 below use these instead of raw OpenAI HTTP calls — see each phase for specifics. `composer require laravel/ai` is already done; `config/ai.php` is published.
+
+**Architecture note (post-Phase-4 revision):** Reranking went through two iterations. First built as a self-hosted Python cross-encoder sidecar (Phase 0), then swapped for `Laravel\Ai\Reranking` backed by Jina's hosted API (Phase 4, on cost/simplicity grounds), then swapped **back** to the self-hosted sidecar after reconsidering — using a hosted third-party API for a component the thesis literally calls "a Cross-Encoder re-ranking model" was a fidelity concern worth resolving in favor of a real self-hosted cross-encoder, at the cost of one more Docker service to maintain. See Phase 4 below for the final state.
 
 ---
 
@@ -34,7 +36,7 @@ This plan turns the thesis architecture into a working prototype. It is intentio
 
 - **No auth, no users table dependency.** Documents and queries are global — anyone with access to the app sees everything. (Auth scaffolding was already stripped per the last two commits — stay that way.)
 - **No login-gated queue dashboard.** Use Laravel's `database` queue driver (already configured) with a plain `php artisan queue:work`. No Horizon — the thesis mentions Horizon as a *justification* for using Laravel, but Horizon itself isn't required for a single-user prototype; the plain queue worker demonstrates the same async-ingestion property.
-- **Cross-encoder re-ranking** uses the official `Laravel\Ai\Reranking` class backed by **Jina**'s rerank API (`default_for_reranking => 'jina'` in `config/ai.php`) rather than a self-hosted Python model — practically free at this project's scale (10M free tokens) and needs no extra container. (An earlier version of this plan built a Python FastAPI + sentence-transformers sidecar for this; it was removed once the official SDK's `Reranking` class was found to cover the same need with less infrastructure.)
+- **Cross-encoder re-ranking** is a self-hosted Python FastAPI sidecar (`rerank/`, `cross-encoder/ms-marco-MiniLM-L-6-v2` via `sentence-transformers`), called over plain HTTP from `ChunkReranker`. This is the final state after two revisions — briefly used `Laravel\Ai\Reranking` backed by Jina's hosted API instead, which was simpler infrastructure but meant this component wasn't literally a "Cross-Encoder re-ranking model" running locally, which the thesis's own wording calls for. Self-hosting costs one more Docker service but resolves that fidelity concern and needs no API key at all.
 - **Chunking strategy and retrieval algorithm are request-time parameters**, not global config — every document is ingested once per chunking strategy (so both 500-token and 1000-token variants exist for the same PDF, enabling direct comparison), and every query picks its retrieval algorithm + rerank on/off at call time.
 - **Evaluation dataset lives in a JSON fixture**, not a UI-managed table — it's a fixed research artifact (50 questions / 5 PDFs), not something a user edits through the app.
 - **Results reporting** is a simple Artisan command that dumps a CSV/table — not a dashboard with charts. A prototype needs the numbers, not visualization polish.
@@ -47,8 +49,8 @@ This plan turns the thesis architecture into a working prototype. It is intentio
 
 - Swapped `db` image in `docker-compose.yaml` from `postgres:18.4-alpine` to `pgvector/pgvector:pg18` so the `vector` extension is available. (Also fixed a pre-existing bug: the port mapping was `5432:6432`, which pointed the host port at a container port nothing listened on.)
 - Added `poppler-utils` to `php/Dockerfile` — provides the `pdftotext` binary that `spatie/pdf-to-text` shells out to.
-- Composer: `spatie/pdf-to-text` (PDF extraction) and **`laravel/ai`** (official AI SDK — see architecture note above; supersedes the originally-planned raw OpenAI HTTP client and Python rerank sidecar).
-- `config/ai.php` published; `default_for_reranking` set to `jina`. `.env` keys: `OPENAI_API_KEY`, `JINA_API_KEY`.
+- Composer: `spatie/pdf-to-text` (PDF extraction) and **`laravel/ai`** (official AI SDK — see architecture note above; supersedes the originally-planned raw OpenAI HTTP client for embeddings/generation/judging).
+- `config/ai.php` published. `.env` key: `OPENAI_API_KEY`. (Reranking is handled separately by the self-hosted sidecar — see Phase 4 — via `RERANK_SERVICE_URL`, no API key needed there.)
 - New migration `enable_pgvector_extension` runs `CREATE EXTENSION IF NOT EXISTS vector`.
 - **Test infra**: `phpunit.xml` switched from in-memory SQLite to a real Postgres database (`rag_testing`, pgvector enabled) — SQLite can't represent vector columns at all, and every phase from here on needs real Postgres-specific schema.
 - Verified: stack rebuilt and up, `pdftotext` works in the `app` container, `vector` extension installed, migration runs clean, tests pass against real Postgres.
@@ -101,16 +103,17 @@ Eloquent models: `Document`, `DocumentChunk`, `Query`, `RagasEvaluation`, with t
 
 ---
 
-## Phase 4 — Cross-encoder re-ranking ✅ done
+## Phase 4 — Cross-encoder re-ranking ✅ done (revised)
 
-- `app/Services/Retrieval/ChunkReranker.php` — thin wrapper around `Laravel\Ai\Reranking`, backed by Jina's rerank API (`default_for_reranking => 'jina'` in `config/ai.php`, set in Phase 0):
-  ```php
-  Reranking::of($contentArray)->limit(5)->rerank($question);
-  ```
-  Each result is a `RankedDocument` with an `index` pointing back into the original input array — the wrapper snapshots the chunk collection to a plain PHP array first (`$chunks->values()->all()`) so it can map `$result->index` straight back to the original `DocumentChunk` model, no content-matching needed.
-- Short-circuits to an empty collection without calling the provider when given zero chunks (`Reranking::assertNothingReranked()` verifies this in tests).
+**Final state**: a self-hosted Python cross-encoder, not a hosted reranking API. Two prior iterations (Python sidecar → `Laravel\Ai\Reranking`/Jina) are recorded above in the architecture notes for context; this is what's actually running.
+
+- `rerank/` — a small FastAPI service (`main.py`, `Dockerfile`, `requirements.txt`) running `cross-encoder/ms-marco-MiniLM-L-6-v2` via `sentence-transformers`. The model is baked into the Docker image at build time (a `RUN python -c "..."` line pre-downloads it) so containers don't hit the network on first request. One endpoint, `POST /rerank { query, documents, limit }` → `[{index, document, score}, ...]` sorted descending by score, truncated to `limit`.
+- `docker-compose.yaml` has a `rerank` service (port 8001→8000); the `app` service gets `RERANK_SERVICE_URL: http://rerank:8000`. `config/services.php` exposes it as `services.rerank.url` (`RERANK_SERVICE_URL` env var, defaults to `http://localhost:8001` for host-based dev).
+- `app/Services/Retrieval/ChunkReranker.php` — calls the sidecar via `Illuminate\Support\Facades\Http`, `->throw()`s on failure (fail loud rather than silently degrade a research measurement). Same index-mapping approach as before: snapshots the chunk collection to a plain PHP array first (`$chunks->values()->all()`) so each result's `index` maps straight back to the original `DocumentChunk` model.
+- Short-circuits to an empty collection without calling the service when given zero chunks.
 - This step is toggleable (a `reranked: bool` the caller decides whether to invoke `ChunkReranker` at all) so the eval harness can compare "with/without re-ranking" as the thesis's post-retrieval-refinement variable.
-- Tested via `Reranking::fake(fn ($prompt) => [...])` with explicit `RankedDocument` responses (the default fake shuffles order randomly, so tests supply deterministic responses) + `Reranking::assertReranked(...)` — no HTTP mocking needed.
+- Tested via `Http::fake(['*/rerank' => Http::response([...])])` with explicit result arrays (deterministic order) + `Http::assertSent(...)`/`Http::assertNothingSent()`, plus a case asserting `RequestException` propagates when the service errors.
+- **Verified for real, not just with fakes**: built the Docker image (torch + sentence-transformers, ~130s build, model baked in), brought the service up, and hit `/rerank` directly with the thesis's own vocabulary-mismatch example from Chapter 2.2.1 (query: "respiratory illness treatment" vs documents about pneumonia treatment vs winter flu prevention) — the real cross-encoder correctly scored the pneumonia document highest despite no shared vocabulary with the query. Also verified the `app` container reaches it internally via `http://rerank:8000`.
 
 ---
 
@@ -195,6 +198,8 @@ Final tally: 50 tests / 177 assertions, run 3x in a row to confirm no flakiness 
 - Full `docker-compose` boot check from a clean rebuild: `docker compose down` → `build` → `up -d` → verified all 5 services (`web`, `app`, `node`, `db`, `cache`) up, `vector` extension present, all 8 migrations ran clean, `pdftotext` available, all three routes (`/`, `/documents`, `/chat`) return 200, and a fresh Playwright screenshot confirms the frontend still renders with zero console errors post-rebuild. `rag_testing` (the manually-created test database from Phase 0) survived the rebuild since only the containers were recreated, not the `postgres_data` volume.
 - `npm run build` and the full Pest suite (50 tests / 177 assertions) both re-verified clean after all of the above.
 - No new README/documentation files beyond this plan and `gaps.md` (which tracks follow-ups the user asked to defer, not fix now).
+
+**Post-wrap-up addendum**: the reranking approach was revisited after this phase closed (see Phase 4's "final state" and the architecture notes at the top) — the stack now has a 6th service (`rerank`), independently rebuilt and verified for real (not just faked): image built clean, model baked in at build time, `/health` and `/rerank` hit directly with a real cross-encoder inference, and the `app` container confirmed to reach it internally over the Docker network. Full Pest suite re-verified at 51 tests / 178 assertions after the change.
 
 ---
 

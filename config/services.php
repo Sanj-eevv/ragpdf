@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'rerank' => [
+        'url' => env('RERANK_SERVICE_URL', 'http://localhost:8001'),
+    ],
+
 ];

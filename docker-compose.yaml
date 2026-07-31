@@ -24,6 +24,7 @@ services:
             REDIS_HOST: cache
             REDIS_PORT: ${REDIS_PORT}
             XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+            RERANK_SERVICE_URL: http://rerank:8000
         extra_hosts:
           - host.docker.internal:host-gateway
     node:
@@ -58,6 +59,11 @@ services:
             POSTGRES_PASSWORD: ${DB_PASSWORD}
     cache:
         image: redis:8.8.1-alpine
+    rerank:
+        build:
+            dockerfile: ./rerank/Dockerfile
+        ports:
+            - '8001:8000'
 
 volumes:
     postgres_data:
