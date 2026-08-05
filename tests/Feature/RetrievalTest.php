@@ -7,14 +7,14 @@ use App\Models\DocumentChunk;
 use App\Services\Retrieval\DenseRetriever;
 use App\Services\Retrieval\HybridRetriever;
 use App\Services\Retrieval\RetrievalService;
-use Laravel\Ai\Embeddings;
+use Illuminate\Support\Facades\Http;
 
 /**
- * @return array<int, float> a 1536-dim vector with `$value` at position 0 and `$second` at position 1, zeros elsewhere
+ * @return array<int, float> a 384-dim vector with `$value` at position 0 and `$second` at position 1, zeros elsewhere
  */
 function vectorWith(float $value, float $second = 0.0): array
 {
-    return [$value, $second, ...array_fill(0, 1534, 0.0)];
+    return [$value, $second, ...array_fill(0, 382, 0.0)];
 }
 
 test('dense retriever orders chunks by cosine similarity to the query', function () {
@@ -33,9 +33,9 @@ test('dense retriever orders chunks by cosine similarity to the query', function
         'embedding' => vectorWith(0.0, 1.0),
     ]);
 
-    Embeddings::fake(fn () => [vectorWith(1.0)]);
+    Http::fake(['*/embed' => Http::response(['embeddings' => [vectorWith(1.0)]])]);
 
-    $results = (new DenseRetriever)->search('irrelevant question text', ChunkingStrategy::Tokens500, $document->id);
+    $results = app(DenseRetriever::class)->search('irrelevant question text', ChunkingStrategy::Tokens500, $document->id);
 
     expect($results->pluck('id')->all())->toBe([$closest->id, $middle->id, $farthest->id]);
 });
@@ -57,9 +57,9 @@ test('dense retriever filters by chunking strategy and document', function () {
         'embedding' => vectorWith(1.0),
     ]);
 
-    Embeddings::fake(fn () => [vectorWith(1.0)]);
+    Http::fake(['*/embed' => Http::response(['embeddings' => [vectorWith(1.0)]])]);
 
-    $results = (new DenseRetriever)->search('question', ChunkingStrategy::Tokens500, $document->id);
+    $results = app(DenseRetriever::class)->search('question', ChunkingStrategy::Tokens500, $document->id);
 
     expect($results->pluck('id')->all())->toBe([$wantedStrategy->id]);
 });
@@ -88,7 +88,7 @@ test('hybrid retriever fuses dense and lexical rankings via RRF', function () {
         'content' => 'a brief mention of pneumonia in passing',
     ]);
 
-    Embeddings::fake(fn () => [vectorWith(1.0)]);
+    Http::fake(['*/embed' => Http::response(['embeddings' => [vectorWith(1.0)]])]);
 
     $results = app(HybridRetriever::class)->search('pneumonia', ChunkingStrategy::Tokens500, $document->id);
 
@@ -105,7 +105,7 @@ test('retrieval service dispatches to the retriever matching the requested algor
         'content' => 'pneumonia treatment information',
     ]);
 
-    Embeddings::fake(fn () => [vectorWith(1.0)]);
+    Http::fake(['*/embed' => Http::response(['embeddings' => [vectorWith(1.0)]])]);
 
     $service = app(RetrievalService::class);
 

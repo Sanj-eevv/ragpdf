@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, useHttp } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
+import { toast } from 'vue-sonner';
 import { store } from '@/actions/App/Http/Controllers/QueryController';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +42,10 @@ type QueryResponse = {
         completion_tokens: number;
     };
     context: ContextChunk[];
+};
+
+type ErrorResponse = {
+    message?: string;
 };
 
 type Message = {
@@ -104,6 +109,13 @@ function ask() {
                 showContext: false,
             });
             http.question = '';
+        },
+        onHttpException: (response) => {
+            const data = response.data as ErrorResponse;
+            toast.error(data.message ?? 'Something went wrong. Please try again.');
+        },
+        onNetworkError: () => {
+            toast.error('Network error. Check your connection and try again.');
         },
     });
 }

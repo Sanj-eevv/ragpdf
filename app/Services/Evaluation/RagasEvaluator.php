@@ -17,12 +17,12 @@ use LogicException;
 /**
  * Runs a Query (and, for the offline experiment harness, its ground-truth
  * answer) through the four RAGAS judges and persists the results. Each judge
- * uses GPT-4o explicitly, per the thesis (the AI SDK's OpenAI default is a
- * newer/different model).
+ * uses gemini-3.6-flash explicitly, per the thesis (the AI SDK's Gemini
+ * default may change independently of this evaluation's model choice).
  */
 class RagasEvaluator
 {
-    private const string MODEL = 'gpt-4o';
+    private const string MODEL = 'gemini-3.6-flash';
 
     public function evaluate(Query $query, ?string $groundTruthAnswer = null): RagasEvaluation
     {

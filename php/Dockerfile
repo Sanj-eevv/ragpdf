@@ -6,7 +6,7 @@ COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr
 # Install php extensions
 # exit on errors, exit on unset variables, print every command as it is executed
 RUN set -eux; \
-    install-php-extensions pdo pdo_pgsql pgsql;
+    install-php-extensions pdo pdo_pgsql pgsql pcntl redis;
 
 # Node.js, from Alpine's own repo (nodejs-current tracks the current stable
 # release) so `npm` and `php artisan` (needed by Wayfinder's dev-mode codegen)

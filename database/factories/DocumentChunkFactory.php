@@ -38,7 +38,7 @@ class DocumentChunkFactory extends Factory
     {
         return array_map(
             fn () => $this->faker->randomFloat(6, -1, 1),
-            range(1, 1536),
+            range(1, 384),
         );
     }
 }

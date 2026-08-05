@@ -7,7 +7,6 @@ use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Services\QueryPipeline;
 use Illuminate\Support\Facades\Http;
-use Laravel\Ai\Embeddings;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
 use Laravel\Ai\Responses\TextResponse;
@@ -16,13 +15,13 @@ test('without reranking, it persists a Query using retrieval order and the gener
     $document = Document::factory()->create();
     $chunk = DocumentChunk::factory()->for($document)->create([
         'chunking_strategy' => ChunkingStrategy::Tokens500,
-        'embedding' => [1.0, ...array_fill(0, 1535, 0.0)],
+        'embedding' => [1.0, ...array_fill(0, 383, 0.0)],
         'content' => 'Pneumonia is treated with antibiotics and rest.',
     ]);
 
-    Embeddings::fake(fn () => [[1.0, ...array_fill(0, 1535, 0.0)]]);
+    Http::fake(['*/embed' => Http::response(['embeddings' => [[1.0, ...array_fill(0, 383, 0.0)]]])]);
     RagAnswerAgent::fake([
-        new TextResponse('Antibiotics and rest.', new Usage(promptTokens: 42, completionTokens: 7), new Meta('openai', 'gpt-3.5-turbo')),
+        new TextResponse('Antibiotics and rest.', new Usage(promptTokens: 42, completionTokens: 7), new Meta('gemini', 'gemini-3.5-flash-lite')),
     ]);
 
     ['query' => $query, 'chunks' => $chunks] = app(QueryPipeline::class)->run(
@@ -42,7 +41,8 @@ test('without reranking, it persists a Query using retrieval order and the gener
         ->and($query->completion_tokens)->toBe(7)
         ->and($chunks->pluck('id')->all())->toBe([$chunk->id]);
 
-    Http::assertNothingSent();
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/embed'));
+    Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/rerank'));
 });
 
 test('with reranking, it persists a Query using the reranked order instead of retrieval order', function () {
@@ -50,19 +50,19 @@ test('with reranking, it persists a Query using the reranked order instead of re
 
     $chunkA = DocumentChunk::factory()->for($document)->create([
         'chunking_strategy' => ChunkingStrategy::Tokens500,
-        'embedding' => [1.0, ...array_fill(0, 1535, 0.0)],
+        'embedding' => [1.0, ...array_fill(0, 383, 0.0)],
         'content' => 'chunk A content',
     ]);
     $chunkB = DocumentChunk::factory()->for($document)->create([
         'chunking_strategy' => ChunkingStrategy::Tokens500,
-        'embedding' => [0.0, 1.0, ...array_fill(0, 1534, 0.0)],
+        'embedding' => [0.0, 1.0, ...array_fill(0, 382, 0.0)],
         'content' => 'chunk B content',
     ]);
 
     // Dense retrieval would rank chunkA first (closer to the query vector);
     // the reranker flips that order.
-    Embeddings::fake(fn () => [[1.0, ...array_fill(0, 1535, 0.0)]]);
     Http::fake([
+        '*/embed' => Http::response(['embeddings' => [[1.0, ...array_fill(0, 383, 0.0)]]]),
         '*/rerank' => Http::response([
             ['index' => 1, 'document' => 'chunk B content', 'score' => 0.9],
             ['index' => 0, 'document' => 'chunk A content', 'score' => 0.4],
@@ -87,10 +87,10 @@ test('it works without a document_id, searching across all documents', function 
     $document = Document::factory()->create();
     $chunk = DocumentChunk::factory()->for($document)->create([
         'chunking_strategy' => ChunkingStrategy::Tokens500,
-        'embedding' => [1.0, ...array_fill(0, 1535, 0.0)],
+        'embedding' => [1.0, ...array_fill(0, 383, 0.0)],
     ]);
 
-    Embeddings::fake(fn () => [[1.0, ...array_fill(0, 1535, 0.0)]]);
+    Http::fake(['*/embed' => Http::response(['embeddings' => [[1.0, ...array_fill(0, 383, 0.0)]]])]);
     RagAnswerAgent::fake(['An answer.']);
 
     ['query' => $query] = app(QueryPipeline::class)->run(

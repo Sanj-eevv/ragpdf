@@ -7,13 +7,13 @@ use App\Models\DocumentChunk;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Generates the final answer via `gpt-3.5-turbo`, per the thesis's choice of
- * a fast, cheap model for the generation step (explicit, since the AI SDK's
- * OpenAI default is a newer model).
+ * Generates the final answer via `gemini-3.5-flash-lite`, per the thesis's
+ * choice of a fast, cheap model for the generation step (explicit, since the
+ * AI SDK's Gemini default is a newer/smarter model).
  */
 class AnswerGenerator
 {
-    private const string MODEL = 'gpt-3.5-turbo';
+    private const string MODEL = 'gemini-3.5-flash-lite';
 
     /**
      * @param  Collection<int, DocumentChunk>  $context

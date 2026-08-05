@@ -11,7 +11,6 @@ use App\Models\Query as QueryModel;
 use App\Models\RagasEvaluation;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Ai\Embeddings;
 
 beforeEach(function () {
     Storage::fake('local');
@@ -21,17 +20,23 @@ beforeEach(function () {
         'content' => 'Pneumonia is treated with antibiotics and rest.',
     ]);
 
-    Embeddings::fake();
-    // Echoes back whatever documents were sent, in the same order, so the
-    // reranked configs in the matrix have a valid index to map back onto
-    // regardless of how many chunks were retrieved.
     Http::fake([
+        // Echoes back whatever documents were sent, in the same order, so the
+        // reranked configs in the matrix have a valid index to map back onto
+        // regardless of how many chunks were retrieved.
         '*/rerank' => fn ($request) => Http::response(
             collect($request->data()['documents'] ?? [])
                 ->values()
                 ->map(fn ($document, $index) => ['index' => $index, 'document' => $document, 'score' => 1.0])
                 ->all()
         ),
+        // One fixed 384-dim vector per input — the test's NO_SIMILARITY_THRESHOLD
+        // retrieval doesn't rank on distance, so the exact value doesn't matter.
+        '*/embed' => fn ($request) => Http::response([
+            'embeddings' => collect($request->data()['inputs'] ?? [])
+                ->map(fn () => array_fill(0, 384, 0.1))
+                ->all(),
+        ]),
     ]);
     RagAnswerAgent::fake(['Antibiotics and rest.']);
     ContextPrecisionJudge::fake([['score' => 0.8, 'reasoning' => 'ok']]);

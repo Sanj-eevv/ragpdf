@@ -9,8 +9,8 @@ use App\Models\Document;
 use App\Services\TextSplitter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Laravel\Ai\Embeddings;
 
 test('uploading a document creates it and dispatches the ingestion job chain in order', function () {
     Bus::fake();
@@ -35,7 +35,15 @@ test('uploading a document creates it and dispatches the ingestion job chain in 
 
 test('the full ingestion pipeline extracts, chunks under both strategies, and embeds a real pdf', function () {
     Storage::fake('local');
-    Embeddings::fake();
+    // Echoes back one 384-dim vector per input, so every chunk gets embedded
+    // regardless of how many chunks the real chunker produces.
+    Http::fake([
+        '*/embed' => fn ($request) => Http::response([
+            'embeddings' => collect($request->data()['inputs'] ?? [])
+                ->map(fn () => array_fill(0, 384, 0.1))
+                ->all(),
+        ]),
+    ]);
 
     $diskPath = 'documents/sample.pdf';
     Storage::disk('local')->put($diskPath, file_get_contents(__DIR__.'/../Fixtures/sample.pdf'));
@@ -67,7 +75,8 @@ test('the full ingestion pipeline extracts, chunks under both strategies, and em
     expect($document->status)->toBe(DocumentStatus::Ready)
         ->and($document->chunks()->whereNull('embedding')->count())->toBe(0);
 
-    Embeddings::assertGenerated(fn ($prompt) => $prompt->contains('Pneumonia'));
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/embed')
+        && collect($request->data()['inputs'] ?? [])->contains(fn ($input) => str_contains($input, 'Pneumonia')));
 });
 
 test('uploading a non-PDF file is rejected by validation', function () {

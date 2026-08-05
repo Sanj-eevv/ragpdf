@@ -10,6 +10,7 @@ use App\Jobs\ExtractDocumentTextJob;
 use App\Models\Document;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,16 @@ class DocumentController extends Controller
             new ChunkDocumentJob($document),
             new EmbedChunksJob($document),
         ])->dispatch();
+
+        return to_route('documents.index');
+    }
+
+    public function destroy(Document $document): RedirectResponse
+    {
+        Storage::disk('local')->delete($document->disk_path);
+        Storage::disk('local')->deleteDirectory($document->directoryPath());
+
+        $document->delete();
 
         return to_route('documents.index');
     }

@@ -16,7 +16,7 @@ test('it injects context chunks and the question into the prompt', function () {
     ]);
 
     RagAnswerAgent::fake([
-        new TextResponse('Antibiotics and rest.', new Usage(promptTokens: 120, completionTokens: 8), new Meta('openai', 'gpt-3.5-turbo')),
+        new TextResponse('Antibiotics and rest.', new Usage(promptTokens: 120, completionTokens: 8), new Meta('gemini', 'gemini-3.5-flash-lite')),
     ]);
 
     $result = (new AnswerGenerator)->generate('How is pneumonia treated?', new Collection([$chunk]));

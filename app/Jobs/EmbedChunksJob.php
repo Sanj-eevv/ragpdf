@@ -4,9 +4,9 @@ namespace App\Jobs;
 
 use App\Enums\DocumentStatus;
 use App\Models\Document;
+use App\Services\Retrieval\ChunkEmbedder;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Laravel\Ai\Embeddings;
 use Throwable;
 
 class EmbedChunksJob implements ShouldQueue
@@ -23,10 +23,10 @@ class EmbedChunksJob implements ShouldQueue
             ->whereNull('embedding')
             ->orderBy('id')
             ->chunkById(self::BATCH_SIZE, function ($chunks): void {
-                $response = Embeddings::for($chunks->pluck('content')->all())->generate();
+                $embeddings = (new ChunkEmbedder)->embed($chunks->pluck('content')->all());
 
                 foreach ($chunks->values() as $index => $chunk) {
-                    $chunk->update(['embedding' => $response->embeddings[$index]]);
+                    $chunk->update(['embedding' => $embeddings[$index]]);
                 }
             });
 

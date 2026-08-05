@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { Head, useForm, usePoll } from '@inertiajs/vue3';
+import { Head, router, useForm, usePoll } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { store } from '@/actions/App/Http/Controllers/DocumentController';
+import {
+    destroy,
+    store,
+} from '@/actions/App/Http/Controllers/DocumentController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +19,6 @@ type DocumentRow = {
     original_filename: string;
     page_count: number | null;
     status: DocumentStatus;
-    error_message: string | null;
     created_at: string;
 };
 
@@ -54,6 +56,25 @@ function submit() {
                 fileInput.value.value = '';
             }
         },
+    });
+}
+
+const deletingId = ref<number | null>(null);
+
+function deleteDocument(document: DocumentRow) {
+    if (
+        !confirm(
+            `Delete "${document.title}"? This also deletes the uploaded file and all its extracted data.`,
+        )
+    ) {
+        return;
+    }
+
+    deletingId.value = document.id;
+
+    router.delete(destroy(document.id).url, {
+        preserveScroll: true,
+        onFinish: () => (deletingId.value = null),
     });
 }
 
@@ -148,6 +169,7 @@ const statusVariant: Record<
                             <th class="py-2 pr-4 font-medium">Title</th>
                             <th class="py-2 pr-4 font-medium">Pages</th>
                             <th class="py-2 pr-4 font-medium">Status</th>
+                            <th class="py-2 pr-4 font-medium"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -165,15 +187,20 @@ const statusVariant: Record<
                                     :variant="statusVariant[document.status]"
                                     >{{ document.status }}</Badge
                                 >
-                                <span
-                                    v-if="
-                                        document.status === 'failed' &&
-                                        document.error_message
-                                    "
-                                    class="ml-2 text-xs text-destructive"
+                            </td>
+                            <td class="py-2 pr-4 text-right">
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    :disabled="deletingId === document.id"
+                                    @click="deleteDocument(document)"
                                 >
-                                    {{ document.error_message }}
-                                </span>
+                                    {{
+                                        deletingId === document.id
+                                            ? 'Deleting…'
+                                            : 'Delete'
+                                    }}
+                                </Button>
                             </td>
                         </tr>
                     </tbody>

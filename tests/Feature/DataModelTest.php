@@ -25,14 +25,14 @@ test('a document has chunks and queries, with the status enum cast', function ()
 test('a document chunk casts its embedding to an array and its strategy to an enum', function () {
     $chunk = DocumentChunk::factory()->create([
         'chunking_strategy' => ChunkingStrategy::Tokens1000,
-        'embedding' => array_fill(0, 1536, 0.5),
+        'embedding' => array_fill(0, 384, 0.5),
     ]);
 
     $chunk->refresh();
 
     expect($chunk->chunking_strategy)->toBe(ChunkingStrategy::Tokens1000)
         ->and($chunk->embedding)->toBeArray()
-        ->and($chunk->embedding)->toHaveCount(1536);
+        ->and($chunk->embedding)->toHaveCount(384);
 });
 
 test('vector similarity search finds the closest chunk by cosine distance', function () {
@@ -40,16 +40,16 @@ test('vector similarity search finds the closest chunk by cosine distance', func
 
     $closest = DocumentChunk::factory()->for($document)->create([
         'content' => 'closest chunk',
-        'embedding' => [1.0, 0.0, ...array_fill(0, 1534, 0.0)],
+        'embedding' => [1.0, 0.0, ...array_fill(0, 382, 0.0)],
     ]);
 
     DocumentChunk::factory()->for($document)->create([
         'content' => 'far chunk',
-        'embedding' => [0.0, 1.0, ...array_fill(0, 1534, 0.0)],
+        'embedding' => [0.0, 1.0, ...array_fill(0, 382, 0.0)],
     ]);
 
     $results = DocumentChunk::query()
-        ->whereVectorSimilarTo('embedding', [1.0, 0.0, ...array_fill(0, 1534, 0.0)])
+        ->whereVectorSimilarTo('embedding', [1.0, 0.0, ...array_fill(0, 382, 0.0)])
         ->limit(1)
         ->get();
 

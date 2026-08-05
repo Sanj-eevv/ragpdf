@@ -12,8 +12,10 @@
     "skills": [
         "ai-sdk-development",
         "laravel-best-practices",
+        "configuring-horizon",
         "wayfinder-development",
         "pest-testing",
+        "inertia-vue-development",
         "tailwindcss-development"
     ]
 }

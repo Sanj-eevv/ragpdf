@@ -18,7 +18,7 @@ return new class extends Migration
             $table->unsignedInteger('chunk_index');
             $table->text('content');
             $table->unsignedInteger('token_count');
-            $table->vector('embedding', dimensions: 1536)->nullable()->index();
+            $table->vector('embedding', dimensions: 384)->nullable()->index();
             $table->timestamps();
 
             $table->fullText('content')->language('english');

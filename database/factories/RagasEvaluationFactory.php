@@ -24,7 +24,7 @@ class RagasEvaluationFactory extends Factory
             'context_recall' => $this->faker->randomFloat(4, 0, 1),
             'faithfulness' => $this->faker->randomFloat(4, 0, 1),
             'answer_relevance' => $this->faker->randomFloat(4, 0, 1),
-            'judge_model' => 'gpt-4o',
+            'judge_model' => 'gemini-3.6-flash',
             'raw_judge_response' => ['reasoning' => $this->faker->sentence()],
         ];
     }

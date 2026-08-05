@@ -13,12 +13,10 @@ return [
     |
     */
 
-    'default' => 'openai',
+    'default' => 'gemini',
     'default_for_images' => 'gemini',
-    'default_for_audio' => 'openai',
-    'default_for_transcription' => 'openai',
-    'default_for_embeddings' => 'openai',
-    'default_for_reranking' => 'cohere',
+    'default_for_audio' => 'gemini',
+    'default_for_transcription' => 'gemini',
 
     /*
     |--------------------------------------------------------------------------
@@ -83,11 +81,6 @@ return [
             ],
         ],
 
-        'cohere' => [
-            'driver' => 'cohere',
-            'key' => env('COHERE_API_KEY'),
-        ],
-
         'deepseek' => [
             'driver' => 'deepseek',
             'key' => env('DEEPSEEK_API_KEY'),
@@ -107,11 +100,6 @@ return [
         'groq' => [
             'driver' => 'groq',
             'key' => env('GROQ_API_KEY'),
-        ],
-
-        'jina' => [
-            'driver' => 'jina',
-            'key' => env('JINA_API_KEY'),
         ],
 
         'mistral' => [

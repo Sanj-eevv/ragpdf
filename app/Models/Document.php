@@ -30,12 +30,19 @@ class Document extends Model
         return $this->hasMany(DocumentChunk::class);
     }
 
-    /**
-     * Path (on the `local` disk) where this document's extracted plain text is stored.
-     */
     public function rawTextPath(): string
     {
         return "documents/{$this->id}/raw.txt";
+    }
+
+    /**
+     * Directory holding this document's derived files (currently just
+     * rawTextPath()), separate from the originally uploaded file at
+     * disk_path.
+     */
+    public function directoryPath(): string
+    {
+        return "documents/{$this->id}";
     }
 
     /**

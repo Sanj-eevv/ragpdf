@@ -15,8 +15,8 @@ The `app` container in `docker-compose.yaml` runs plain `php-fpm`. `QUEUE_CONNEC
 
 (Not an issue when running locally via `composer run dev` — Laravel's `dev` orchestrator starts a queue listener automatically.)
 
-### 2. `OPENAI_API_KEY` / `JINA_API_KEY` are blank
-Nothing in the app will actually call a real embedding/generation/rerank/judge endpoint until these are filled in `.env`. Everything so far has been verified with `laravel/ai`'s fakes (`Embeddings::fake()`, `Reranking::fake()`, agent `::fake()`) — real end-to-end behavior (real PDF → real embeddings → real answer) hasn't been exercised yet since the user is adding these keys themselves.
+### 2. `OPENAI_API_KEY` is blank
+Nothing in the app will actually call a real embedding/generation/judge endpoint until this is filled in `.env`. Everything so far has been verified with `laravel/ai`'s fakes (`Embeddings::fake()`, agent `::fake()`) — real end-to-end behavior (real PDF → real embeddings → real answer) hasn't been exercised yet since the user is adding this key themselves. (Reranking no longer needs an API key at all — it's a self-hosted cross-encoder now, verified for real already; see `plan.md` Phase 4.)
 
 ### 3. `rag_testing` database was created by hand
 `phpunit.xml` points tests at a real Postgres database (`rag_testing`, pgvector enabled) instead of SQLite, since SQLite can't represent vector columns. That database was created manually via `docker exec ... psql -c "CREATE DATABASE rag_testing"` — it's **not** created by any migration, seeder, or docker-compose init script. If the `postgres_data` volume is ever wiped (`docker compose down -v`, fresh volume, new machine), tests will fail until someone recreates it:

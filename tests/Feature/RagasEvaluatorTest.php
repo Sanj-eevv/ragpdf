@@ -33,7 +33,7 @@ test('it scores all four metrics and persists the raw judge responses when a gro
         ->and($evaluation->context_recall)->toBe(1.0)
         ->and($evaluation->faithfulness)->toBe(1.0)
         ->and($evaluation->answer_relevance)->toBe(0.95)
-        ->and($evaluation->judge_model)->toBe('gpt-4o')
+        ->and($evaluation->judge_model)->toBe('gemini-3.6-flash')
         ->and($evaluation->raw_judge_response['context_precision']['reasoning'])->toBe('Chunk directly answers the question.');
 
     ContextPrecisionJudge::assertPrompted(fn ($prompt) => $prompt->contains('How is pneumonia treated?')
