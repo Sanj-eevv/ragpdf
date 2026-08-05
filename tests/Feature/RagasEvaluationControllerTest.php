@@ -1,9 +1,13 @@
 <?php
 
+use App\Enums\ChunkingStrategy;
 use App\Enums\DocumentStatus;
 use App\Enums\EvaluationRunStatus;
+use App\Enums\RetrievalAlgorithm;
 use App\Jobs\RunSingleRagasEvaluationJob;
 use App\Models\Document;
+use App\Models\Query;
+use App\Models\RagasEvaluation;
 use App\Models\RagasEvaluationRun;
 use App\Services\Evaluation\RagasExperimentRunner;
 use Illuminate\Bus\PendingBatch;
@@ -31,7 +35,38 @@ test('index renders the latest evaluation run', function () {
         ->where('run.status', 'completed')
         // mini_ragas_dataset.json has 3 rows.
         ->has('questions', 3)
-        ->where('questions.0.question', 'How is pneumonia treated?'));
+        ->where('questions.0.question', 'How is pneumonia treated?')
+        ->where('details', []));
+});
+
+test('index renders per-question details once a completed run has real results', function () {
+    $run = RagasEvaluationRun::query()->create([
+        'status' => EvaluationRunStatus::Completed,
+        'total' => 1,
+        'completed' => 1,
+        'summary' => [],
+    ]);
+
+    $query = Query::factory()->create([
+        'ragas_evaluation_run_id' => $run->id,
+        'question' => 'How is pneumonia treated?',
+        'answer' => 'Antibiotics and rest.',
+        'ground_truth_answer' => 'Antibiotics and rest.',
+        'chunking_strategy' => ChunkingStrategy::Tokens500,
+        'retrieval_algorithm' => RetrievalAlgorithm::Dense,
+        'reranked' => false,
+    ]);
+    RagasEvaluation::factory()->for($query, 'queryRecord')->create(['context_precision' => 0.8]);
+
+    $response = $this->get(route('evaluation.index'));
+
+    $response->assertInertia(fn ($page) => $page
+        ->component('Evaluation/Index')
+        ->has('details', 1)
+        ->where('details.0.question', 'How is pneumonia treated?')
+        ->where('details.0.ground_truth_answer', 'Antibiotics and rest.')
+        ->where('details.0.configs.0.answer', 'Antibiotics and rest.')
+        ->where('details.0.configs.0.context_precision', 0.8));
 });
 
 test('index renders no run when none exist yet', function () {
@@ -39,7 +74,8 @@ test('index renders no run when none exist yet', function () {
 
     $response->assertInertia(fn ($page) => $page
         ->component('Evaluation/Index')
-        ->where('run', null));
+        ->where('run', null)
+        ->where('details', []));
 });
 
 test('index renders an empty question list when the dataset file is missing', function () {

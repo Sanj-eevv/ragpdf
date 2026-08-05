@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\ChunkingStrategy;
 use App\Enums\DocumentStatus;
 use App\Enums\EvaluationRunStatus;
+use App\Enums\RetrievalAlgorithm;
 use App\Models\Document;
 use App\Models\Query;
 use App\Models\RagasEvaluation;
@@ -127,4 +129,56 @@ test('refreshResults is idempotent and self-heals once a previously-missing unit
     $run->refresh();
     expect($run->completed)->toBe(1)
         ->and($run->error_message)->toBeNull();
+});
+
+test('detailsByQuestion groups results by question, each with its own per-config answers and scores', function () {
+    $run = RagasEvaluationRun::query()->create(['status' => EvaluationRunStatus::Completed, 'total' => 3]);
+
+    $queryA1 = Query::factory()->create([
+        'ragas_evaluation_run_id' => $run->id,
+        'question' => 'What is Laravel?',
+        'answer' => 'A PHP framework.',
+        'ground_truth_answer' => 'Laravel is a PHP web framework.',
+        'chunking_strategy' => ChunkingStrategy::Tokens500,
+        'retrieval_algorithm' => RetrievalAlgorithm::Dense,
+        'reranked' => false,
+    ]);
+    RagasEvaluation::factory()->for($queryA1, 'queryRecord')->create(['context_precision' => 0.5]);
+
+    $queryA2 = Query::factory()->create([
+        'ragas_evaluation_run_id' => $run->id,
+        'question' => 'What is Laravel?',
+        'answer' => 'A web framework built on PHP.',
+        'chunking_strategy' => ChunkingStrategy::Tokens500,
+        'retrieval_algorithm' => RetrievalAlgorithm::Dense,
+        'reranked' => true,
+    ]);
+    RagasEvaluation::factory()->for($queryA2, 'queryRecord')->create(['context_precision' => 0.9]);
+
+    $queryB = Query::factory()->create([
+        'ragas_evaluation_run_id' => $run->id,
+        'question' => 'Who created Laravel?',
+        'answer' => 'Taylor Otwell.',
+        'chunking_strategy' => ChunkingStrategy::Tokens500,
+        'retrieval_algorithm' => RetrievalAlgorithm::Dense,
+        'reranked' => false,
+    ]);
+    RagasEvaluation::factory()->for($queryB, 'queryRecord')->create();
+
+    $details = app(RagasExperimentRunner::class)->detailsByQuestion($run);
+
+    expect($details)->toHaveCount(2);
+
+    $laravelDetail = collect($details)->firstWhere('question', 'What is Laravel?');
+    expect($laravelDetail['ground_truth_answer'])->toBe('Laravel is a PHP web framework.')
+        ->and($laravelDetail['configs'])->toHaveCount(2)
+        ->and(collect($laravelDetail['configs'])->pluck('answer')->all())->toBe([
+            'A PHP framework.',
+            'A web framework built on PHP.',
+        ])
+        ->and(collect($laravelDetail['configs'])->pluck('context_precision')->all())->toBe([0.5, 0.9]);
+
+    $creatorDetail = collect($details)->firstWhere('question', 'Who created Laravel?');
+    expect($creatorDetail['configs'])->toHaveCount(1)
+        ->and($creatorDetail['configs'][0]['answer'])->toBe('Taylor Otwell.');
 });

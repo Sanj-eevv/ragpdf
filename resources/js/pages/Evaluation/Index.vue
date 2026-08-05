@@ -14,6 +14,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppearance } from '@/composables/useAppearance';
 import { cancel, download, store } from '@/routes/evaluation';
@@ -61,12 +69,53 @@ type DatasetQuestion = {
     answerable: boolean;
 };
 
+type QuestionDetailConfig = {
+    config_id: string;
+    answer: string | null;
+    context_precision: number | null;
+    context_recall: number | null;
+    faithfulness: number | null;
+    answer_relevance: number | null;
+    latency_ms: number | null;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+};
+
+type QuestionDetail = {
+    question: string;
+    ground_truth_answer: string | null;
+    configs: QuestionDetailConfig[];
+};
+
 const props = defineProps<{
     run: EvaluationRun | null;
     questions: DatasetQuestion[];
+    details: QuestionDetail[];
 }>();
 
 const showQuestions = ref(false);
+
+const selectedQuestion = ref<string | null>(null);
+
+watch(
+    () => props.details,
+    (details: QuestionDetail[]) => {
+        if (details.length === 0) {
+            selectedQuestion.value = null;
+
+            return;
+        }
+
+        if (!selectedQuestion.value || !details.some((detail: QuestionDetail) => detail.question === selectedQuestion.value)) {
+            selectedQuestion.value = details[0].question;
+        }
+    },
+    { immediate: true },
+);
+
+const selectedDetail = computed<QuestionDetail | null>(
+    () => props.details.find((detail: QuestionDetail) => detail.question === selectedQuestion.value) ?? null,
+);
 
 defineOptions({
     layout: {
@@ -132,15 +181,23 @@ const SERIES_COLORS = {
 const { resolvedAppearance } = useAppearance();
 const seriesColors = computed(() => SERIES_COLORS[resolvedAppearance.value as 'light' | 'dark']);
 
+// The raw config_id (e.g. "tokens_500_dense_no_rerank") is precise and used
+// as-is elsewhere (table cells, keys) — but reads poorly as a chart axis
+// label, so only the label shown on the chart gets the underscores swapped
+// for spaces.
+function formatConfigLabel(configId: string): string {
+    return configId.replace(/_/g, ' ');
+}
+
 const chartData = computed(() => {
-    const summary = props.run?.summary ?? [];
+    const configs = selectedDetail.value?.configs ?? [];
 
     return {
-        labels: summary.map((config: ConfigSummary) => config.config_id),
+        labels: configs.map((config: QuestionDetailConfig) => formatConfigLabel(config.config_id)),
         datasets: METRICS.map((metric, index) => ({
             label: metric.label,
             backgroundColor: seriesColors.value[index],
-            data: summary.map((config: ConfigSummary) => config[metric.key]),
+            data: configs.map((config: QuestionDetailConfig) => config[metric.key]),
         })),
     };
 });
@@ -364,14 +421,70 @@ function formatNumber(value: number | null | undefined): string {
         </Card>
 
         <template v-if="run && run.status === 'completed' && run.summary && run.summary.length > 0">
-            <Card>
+            <Card v-if="selectedDetail">
                 <CardHeader>
-                    <CardTitle>RAGAS scores by configuration</CardTitle>
+                    <CardTitle>RAGAS scores by question</CardTitle>
+                    <CardDescription>
+                        Compare all 8 configurations for one question at a time — an
+                        average across the whole dataset hides exactly this kind of
+                        detail (e.g. did it correctly say "Information Not Found"?).
+                    </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-1.5">
+                        <Label>Question</Label>
+                        <Select v-model="selectedQuestion">
+                            <SelectTrigger class="w-full sm:w-[32rem]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem
+                                    v-for="detail in details"
+                                    :key="detail.question"
+                                    :value="detail.question"
+                                >
+                                    {{ detail.question }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <p class="text-sm text-muted-foreground">
+                            <span class="font-medium">Ground truth answer:</span>
+                            {{ selectedDetail.ground_truth_answer ?? '—' }}
+                        </p>
+                    </div>
+
                     <div class="h-80">
                         <Bar v-if="isMounted" :data="chartData" :options="chartOptions" />
                         <Skeleton v-else class="h-full w-full" />
+                    </div>
+
+                    <div class="overflow-x-auto rounded-md border">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b text-left text-muted-foreground">
+                                    <th class="py-2 px-3 font-medium">Config</th>
+                                    <th class="py-2 px-3 font-medium">Answer</th>
+                                    <th class="py-2 px-3 font-medium">Ctx Precision</th>
+                                    <th class="py-2 px-3 font-medium">Ctx Recall</th>
+                                    <th class="py-2 px-3 font-medium">Faithfulness</th>
+                                    <th class="py-2 px-3 font-medium">Answer Relevance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="config in selectedDetail.configs"
+                                    :key="config.config_id"
+                                    class="border-b last:border-0 align-top"
+                                >
+                                    <td class="py-2 px-3 font-mono text-xs whitespace-nowrap">{{ formatConfigLabel(config.config_id) }}</td>
+                                    <td class="py-2 px-3">{{ config.answer ?? '—' }}</td>
+                                    <td class="py-2 px-3">{{ formatScore(config.context_precision) }}</td>
+                                    <td class="py-2 px-3">{{ formatScore(config.context_recall) }}</td>
+                                    <td class="py-2 px-3">{{ formatScore(config.faithfulness) }}</td>
+                                    <td class="py-2 px-3">{{ formatScore(config.answer_relevance) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </CardContent>
             </Card>
@@ -380,9 +493,9 @@ function formatNumber(value: number | null | undefined): string {
                 <CardHeader>
                     <CardTitle>Baseline vs Best</CardTitle>
                     <CardDescription>
-                        Naive baseline (<span class="font-mono text-xs">{{ comparison.baseline.config_id }}</span>)
+                        Naive baseline (<span class="font-mono text-xs">{{ formatConfigLabel(comparison.baseline.config_id) }}</span>)
                         vs the best-performing config by average RAGAS score
-                        (<span class="font-mono text-xs">{{ comparison.best.config_id }}</span>).
+                        (<span class="font-mono text-xs">{{ formatConfigLabel(comparison.best.config_id) }}</span>).
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -459,7 +572,7 @@ function formatNumber(value: number | null | undefined): string {
                                     :key="config.config_id"
                                     class="border-b last:border-0"
                                 >
-                                    <td class="py-2 pr-4 font-mono text-xs">{{ config.config_id }}</td>
+                                    <td class="py-2 pr-4 font-mono text-xs">{{ formatConfigLabel(config.config_id) }}</td>
                                     <td class="py-2 pr-4">{{ config.n }}</td>
                                     <td class="py-2 pr-4">{{ formatScore(config.context_precision) }}</td>
                                     <td class="py-2 pr-4">{{ formatScore(config.context_recall) }}</td>

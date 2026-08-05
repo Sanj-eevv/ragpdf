@@ -25,6 +25,7 @@ class Query extends Model
         'ragas_evaluation_run_id',
         'question',
         'answer',
+        'ground_truth_answer',
         'chunking_strategy',
         'retrieval_algorithm',
         'reranked',

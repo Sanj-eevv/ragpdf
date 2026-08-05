@@ -26,9 +26,14 @@ class RagasEvaluationController extends Controller
             $questions = [];
         }
 
+        $run = RagasEvaluationRun::query()->latest()->first();
+
         return Inertia::render('Evaluation/Index', [
-            'run' => RagasEvaluationRun::query()->latest()->first(),
+            'run' => $run,
             'questions' => $questions,
+            'details' => $run && $run->status === EvaluationRunStatus::Completed
+                ? $runner->detailsByQuestion($run)
+                : [],
         ]);
     }
 

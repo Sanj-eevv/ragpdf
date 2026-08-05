@@ -72,7 +72,10 @@ class RunSingleRagasEvaluationJob implements ShouldQueue
                 $this->reranked,
             );
 
-            $query->update(['ragas_evaluation_run_id' => $this->run->id]);
+            $query->update([
+                'ragas_evaluation_run_id' => $this->run->id,
+                'ground_truth_answer' => $this->groundTruthAnswer,
+            ]);
         }
         // else: the pipeline already produced an answer last time and only
         // judging failed — reuse that Query rather than generating a new

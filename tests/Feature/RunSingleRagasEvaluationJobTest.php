@@ -66,6 +66,7 @@ test('the job evaluates its one question/config unit, tags the query with the ru
 
     $query = Query::sole();
     expect($query->ragas_evaluation_run_id)->toBe($run->id)
+        ->and($query->ground_truth_answer)->toBe('Antibiotics and rest.')
         ->and($query->ragasEvaluation)->not->toBeNull()
         ->and($query->ragasEvaluation->context_precision)->toBe(0.8);
 });

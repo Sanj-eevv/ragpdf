@@ -207,6 +207,45 @@ class RagasExperimentRunner
     }
 
     /**
+     * Groups a run's results by question, one entry per question with every
+     * config's own answer and scores — for the GUI's per-question view,
+     * where the aggregate summary()/writeCsv() output averages across
+     * questions and hides exactly the kind of per-question detail (e.g. did
+     * it correctly answer "Information Not Found"?) that matters most.
+     * Computed fresh from the Query/RagasEvaluation rows on each page load
+     * rather than persisted, same reasoning as refreshResults().
+     *
+     * @return array<int, array{question: string, configs: array<int, array<string, mixed>>}>
+     */
+    public function detailsByQuestion(RagasEvaluationRun $run): array
+    {
+        return Query::query()
+            ->where('ragas_evaluation_run_id', $run->id)
+            ->with('ragasEvaluation')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Query $query) => $this->buildRow($query))
+            ->groupBy('question')
+            ->map(fn (Collection $rows, string $question) => [
+                'question' => $question,
+                'ground_truth_answer' => $rows->first()['ground_truth_answer'],
+                'configs' => $rows->map(fn (array $row) => [
+                    'config_id' => $row['config_id'],
+                    'answer' => $row['answer'],
+                    'context_precision' => $row['context_precision'],
+                    'context_recall' => $row['context_recall'],
+                    'faithfulness' => $row['faithfulness'],
+                    'answer_relevance' => $row['answer_relevance'],
+                    'latency_ms' => $row['latency_ms'],
+                    'prompt_tokens' => $row['prompt_tokens'],
+                    'completion_tokens' => $row['completion_tokens'],
+                ])->values()->all(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function buildRow(Query $query): array
@@ -225,6 +264,7 @@ class RagasExperimentRunner
             'document' => $query->document?->original_filename,
             'question' => $query->question,
             'answer' => $query->answer,
+            'ground_truth_answer' => $query->ground_truth_answer,
             'context_precision' => $evaluation?->context_precision,
             'context_recall' => $evaluation?->context_recall,
             'faithfulness' => $evaluation?->faithfulness,
