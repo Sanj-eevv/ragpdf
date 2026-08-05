@@ -1,0 +1,8 @@
+[
+    {
+        "document_path": "tests/Fixtures/sample.pdf",
+        "question": "What is this document about?",
+        "ground_truth_answer": null,
+        "answerable": true
+    }
+]

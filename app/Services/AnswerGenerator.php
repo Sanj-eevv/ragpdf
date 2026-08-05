@@ -47,11 +47,6 @@ class AnswerGenerator
                 ->map(fn (DocumentChunk $chunk, int $index) => "[{$index}] {$chunk->content}")
                 ->implode("\n\n");
 
-        return <<<PROMPT
-            Context:
-            {$contextText}
-
-            Question: {$question}
-            PROMPT;
+        return "Context:\n{$contextText}\n\nQuestion: {$question}";
     }
 }

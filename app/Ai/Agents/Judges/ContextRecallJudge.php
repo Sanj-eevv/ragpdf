@@ -20,17 +20,15 @@ class ContextRecallJudge implements Agent, HasStructuredOutput
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-            You are a completeness judge for a Retrieval-Augmented Generation system.
+        return 'You are a completeness judge for a Retrieval-Augmented Generation system.
 
-            You will be given a verified ground-truth answer and a list of retrieved text
-            chunks. Break the ground-truth answer down into its individual factual statements,
-            then determine what proportion of those statements can be explicitly found within
-            the retrieved chunks.
+You will be given a verified ground-truth answer and a list of retrieved text
+chunks. Break the ground-truth answer down into its individual factual statements,
+then determine what proportion of those statements can be explicitly found within
+the retrieved chunks.
 
-            Score from 0.0 (none of the ground-truth facts are present in the retrieved
-            context) to 1.0 (every ground-truth fact is present).
-            INSTRUCTIONS;
+Score from 0.0 (none of the ground-truth facts are present in the retrieved
+context) to 1.0 (every ground-truth fact is present).';
     }
 
     public function schema(JsonSchema $schema): array

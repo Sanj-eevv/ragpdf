@@ -39,4 +39,8 @@ return [
         'url' => env('RERANK_SERVICE_URL', 'http://localhost:8001'),
     ],
 
+    'ragas' => [
+        'dataset_path' => env('RAGAS_DATASET_PATH', 'database/fixtures/ragas_dataset.json'),
+    ],
+
 ];

@@ -1,14 +1,62 @@
 [
-  {
-    "document_filename": "REPLACE_WITH_YOUR_PDF_1.pdf",
-    "question": "REPLACE: an answerable question whose answer genuinely appears in this PDF",
-    "ground_truth_answer": "REPLACE: the verified correct answer, in your own words",
-    "answerable": true
-  },
-  {
-    "document_filename": "REPLACE_WITH_YOUR_PDF_1.pdf",
-    "question": "REPLACE: a question whose answer does NOT appear anywhere in this PDF (tests the Accuracy Fallacy)",
-    "ground_truth_answer": null,
-    "answerable": false
-  }
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "What was the release date of Laravel 5.1, the LTS version?",
+        "ground_truth_answer": "Laravel 5.1 (LTS) was released on 2015-06-09.",
+        "answerable": true
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "What two steps does the guide give for removing 'public' from a Laravel app's URLs?",
+        "ground_truth_answer": "Copy the .htaccess file from the /public directory to the Laravel project's root folder, and rename server.php in the root folder to index.php.",
+        "answerable": true
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "What does the guide say the 'sync' queue driver does, and why is it discouraged in production?",
+        "ground_truth_answer": "The sync driver runs a queued job immediately within the existing process, effectively meaning there is no queue at all. It's useful for local or testing purposes but is not recommended for production since it removes the performance benefit of a real queue.",
+        "answerable": true
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "What is the key difference between a 'before' and an 'after' middleware, according to the Middleware chapter?",
+        "ground_truth_answer": "A 'before' middleware performs its action before calling $next($request), so the action happens before the controller code executes. An 'after' middleware calls $next($request) first and performs its action afterward on the returned response, so the action happens after the controller code executes.",
+        "answerable": true
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "What Artisan command does the guide give for generating a new Policy class, and where does it get placed?",
+        "ground_truth_answer": "php artisan make:policy PostPolicy, which places the generated policy in the app/Policies directory.",
+        "answerable": true
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "How do you configure Laravel Sanctum for API token authentication?",
+        "ground_truth_answer": null,
+        "answerable": false
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "How does Laravel Livewire let you build reactive components without writing JavaScript?",
+        "ground_truth_answer": null,
+        "answerable": false
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "How do you configure Laravel Vite for asset bundling?",
+        "ground_truth_answer": null,
+        "answerable": false
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "How does Laravel Octane keep the application in memory between requests to improve performance?",
+        "ground_truth_answer": null,
+        "answerable": false
+    },
+    {
+        "document_path": "public/assets/laravel.pdf",
+        "question": "How do you integrate Laravel with Inertia.js to build an SPA with server-side routing?",
+        "ground_truth_answer": null,
+        "answerable": false
+    }
 ]

@@ -19,14 +19,12 @@ class RagAnswerAgent implements Agent
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-            You are a question-answering assistant. Answer the user's question using ONLY the
-            context provided in the prompt. Do not use any outside knowledge.
+        return 'You are a question-answering assistant. Answer the user\'s question using ONLY the
+context provided in the prompt. Do not use any outside knowledge.
 
-            If the context does not contain enough information to answer the question, respond
-            with exactly: Information Not Found
+If the context does not contain enough information to answer the question, respond
+with exactly: Information Not Found
 
-            Do not explain why the information is missing. Do not guess or speculate.
-            INSTRUCTIONS;
+Do not explain why the information is missing. Do not guess or speculate.';
     }
 }

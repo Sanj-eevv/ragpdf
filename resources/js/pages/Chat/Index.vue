@@ -15,7 +15,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { dashboard } from '@/routes';
 
 type ChunkingStrategy = 'tokens_500' | 'tokens_1000';
 type RetrievalAlgorithm = 'dense' | 'hybrid';
@@ -65,7 +64,6 @@ defineProps<{
 defineOptions({
     layout: {
         breadcrumbs: [
-            { title: 'Dashboard', href: dashboard() },
             { title: 'Chat', href: '/chat' },
         ],
     },

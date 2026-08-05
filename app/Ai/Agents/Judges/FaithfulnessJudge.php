@@ -20,18 +20,16 @@ class FaithfulnessJudge implements Agent, HasStructuredOutput
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-            You are a hallucination judge for a Retrieval-Augmented Generation system.
+        return 'You are a hallucination judge for a Retrieval-Augmented Generation system.
 
-            You will be given a generated answer and the retrieved context it was supposed to
-            be based on. Break the answer down into its individual factual claims, then verify
-            each claim can be directly deduced from the retrieved context. A claim that cannot
-            be logically deduced from the context is a hallucination.
+You will be given a generated answer and the retrieved context it was supposed to
+be based on. Break the answer down into its individual factual claims, then verify
+each claim can be directly deduced from the retrieved context. A claim that cannot
+be logically deduced from the context is a hallucination.
 
-            Score from 0.0 (no claims are supported by the context) to 1.0 (every claim is
-            fully supported by the context). If the answer is exactly "Information Not Found",
-            score 1.0 (it makes no unsupported claims).
-            INSTRUCTIONS;
+Score from 0.0 (no claims are supported by the context) to 1.0 (every claim is
+fully supported by the context). If the answer is exactly "Information Not Found",
+score 1.0 (it makes no unsupported claims).';
     }
 
     public function schema(JsonSchema $schema): array

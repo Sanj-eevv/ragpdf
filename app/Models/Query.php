@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
+ * @property ChunkingStrategy $chunking_strategy
+ * @property RetrievalAlgorithm $retrieval_algorithm
  * @property array<int, int>|null $retrieved_chunk_ids
  */
 class Query extends Model
@@ -20,6 +22,7 @@ class Query extends Model
 
     protected $fillable = [
         'document_id',
+        'ragas_evaluation_run_id',
         'question',
         'answer',
         'chunking_strategy',

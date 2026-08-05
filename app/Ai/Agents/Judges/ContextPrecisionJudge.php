@@ -20,18 +20,16 @@ class ContextPrecisionJudge implements Agent, HasStructuredOutput
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-            You are an evidence-quality judge for a Retrieval-Augmented Generation system.
+        return 'You are an evidence-quality judge for a Retrieval-Augmented Generation system.
 
-            You will be given a question and a ranked list of retrieved text chunks (rank 0
-            is the highest-ranked / most-relevant-per-the-retriever chunk). Determine how much
-            of the retrieved context is actually necessary evidence for answering the question,
-            versus irrelevant noise. Penalize the score if genuinely relevant chunks are ranked
-            low while irrelevant chunks are ranked high.
+You will be given a question and a ranked list of retrieved text chunks (rank 0
+is the highest-ranked / most-relevant-per-the-retriever chunk). Determine how much
+of the retrieved context is actually necessary evidence for answering the question,
+versus irrelevant noise. Penalize the score if genuinely relevant chunks are ranked
+low while irrelevant chunks are ranked high.
 
-            Score from 0.0 (no retrieved chunk is useful) to 1.0 (every retrieved chunk is
-            useful and well-ranked).
-            INSTRUCTIONS;
+Score from 0.0 (no retrieved chunk is useful) to 1.0 (every retrieved chunk is
+useful and well-ranked).';
     }
 
     public function schema(JsonSchema $schema): array

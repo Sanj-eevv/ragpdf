@@ -19,19 +19,17 @@ class AnswerRelevanceJudge implements Agent, HasStructuredOutput
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-            You are a relevance judge for a Retrieval-Augmented Generation system.
+        return 'You are a relevance judge for a Retrieval-Augmented Generation system.
 
-            You will be given a question and a generated answer. Determine whether the answer
-            directly addresses what was asked, regardless of whether the answer is factually
-            correct. An answer that is factually accurate but doesn't actually address the
-            question should score low. An answer of exactly "Information Not Found" is relevant
-            (score 1.0) if it is a reasonable response to the question given no supporting
-            context was available.
+You will be given a question and a generated answer. Determine whether the answer
+directly addresses what was asked, regardless of whether the answer is factually
+correct. An answer that is factually accurate but doesn\'t actually address the
+question should score low. An answer of exactly "Information Not Found" is relevant
+(score 1.0) if it is a reasonable response to the question given no supporting
+context was available.
 
-            Score from 0.0 (completely fails to address the question) to 1.0 (directly and
-            fully addresses the question).
-            INSTRUCTIONS;
+Score from 0.0 (completely fails to address the question) to 1.0 (directly and
+fully addresses the question).';
     }
 
     public function schema(JsonSchema $schema): array

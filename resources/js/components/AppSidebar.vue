@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { FileText, LayoutGrid, MessageSquare } from '@lucide/vue';
+import { BarChart3, FileText, MessageSquare } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import {
@@ -11,17 +11,12 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
 import { index as chatIndex } from '@/routes/chat';
 import { index as documentsIndex } from '@/routes/documents';
+import { index as evaluationIndex } from '@/routes/evaluation';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
     {
         title: 'Documents',
         href: documentsIndex(),
@@ -32,6 +27,11 @@ const mainNavItems: NavItem[] = [
         href: chatIndex(),
         icon: MessageSquare,
     },
+    {
+        title: 'Evaluation',
+        href: evaluationIndex(),
+        icon: BarChart3,
+    },
 ];
 </script>
 
@@ -41,7 +41,7 @@ const mainNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link :href="documentsIndex()">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

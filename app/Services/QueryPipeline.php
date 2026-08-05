@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Collection;
 /**
  * The shared retrieval -> (optional) rerank -> generate -> persist pipeline
  * used both by the interactive chat endpoint (QueryController) and the
- * offline experiment runner (rag:evaluate), so the two stay in lockstep.
+ * RAGAS evaluation run's per-unit job (RunSingleRagasEvaluationJob), so the
+ * two stay in lockstep.
  */
 class QueryPipeline
 {

@@ -117,12 +117,9 @@ class RagasEvaluator
      */
     private function buildContextPrecisionPrompt(string $question, Collection $chunks): string
     {
-        return <<<PROMPT
-            Question: {$question}
-
-            Retrieved chunks (ranked, most relevant-per-the-retriever first):
-            {$this->formatChunks($chunks)}
-            PROMPT;
+        return "Question: {$question}\n\n"
+            ."Retrieved chunks (ranked, most relevant-per-the-retriever first):\n"
+            .$this->formatChunks($chunks);
     }
 
     /**
@@ -130,13 +127,9 @@ class RagasEvaluator
      */
     private function buildContextRecallPrompt(string $groundTruthAnswer, Collection $chunks): string
     {
-        return <<<PROMPT
-            Ground-truth answer:
-            {$groundTruthAnswer}
-
-            Retrieved chunks:
-            {$this->formatChunks($chunks)}
-            PROMPT;
+        return "Ground-truth answer:\n{$groundTruthAnswer}\n\n"
+            ."Retrieved chunks:\n"
+            .$this->formatChunks($chunks);
     }
 
     /**
@@ -144,22 +137,14 @@ class RagasEvaluator
      */
     private function buildFaithfulnessPrompt(string $answer, Collection $chunks): string
     {
-        return <<<PROMPT
-            Generated answer:
-            {$answer}
-
-            Retrieved context:
-            {$this->formatChunks($chunks)}
-            PROMPT;
+        return "Generated answer:\n{$answer}\n\n"
+            ."Retrieved context:\n"
+            .$this->formatChunks($chunks);
     }
 
     private function buildAnswerRelevancePrompt(string $question, string $answer): string
     {
-        return <<<PROMPT
-            Question: {$question}
-
-            Generated answer:
-            {$answer}
-            PROMPT;
+        return "Question: {$question}\n\n"
+            ."Generated answer:\n{$answer}";
     }
 }
