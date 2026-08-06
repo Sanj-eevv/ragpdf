@@ -36,6 +36,16 @@ COPY . .
 # run composer dump-autoload --optimize
 RUN composer dump-autoload --optimize
 
+# Node dev image, used by the `node` compose service (Vite dev server).
+# It only needs `php artisan` for Wayfinder's dev-mode codegen, and
+# laravel/wayfinder is a `require` (not require-dev) package, so unlike
+# app_dev this stage skips xdebug and the composer dev-deps reinstall.
+FROM app AS node_dev
+
+# Bake node_modules into the image so it doesn't need reinstalling on
+# every container start.
+RUN npm ci
+
 # Dev image
 # This stage is meant to be target-built into a separate image
 # https://docs.docker.com/develop/develop-images/multistage-build/#stop-at-a-specific-build-stage

@@ -1,17 +1,12 @@
 x-php-build: &php-build
     build:
         dockerfile: ./php/Dockerfile
-        target: "${BUILD_TARGET:-app_dev}"
-
-# .env is bind-mounted into every PHP container, so Laravel already picks up
-# DB_DATABASE/DB_PORT/etc from it. The only values that differ inside the
-# docker network (vs. .env's host-machine defaults) are the hostnames below.
+        target: '${BUILD_TARGET:-app_dev}'
 x-php-env: &php-env
     DB_HOST: db
     REDIS_HOST: cache
-
 services:
-    web:
+    server:
         build:
             dockerfile: ./nginx/Dockerfile
         ports:
@@ -26,7 +21,7 @@ services:
             - ./php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini:ro
         environment:
             <<: *php-env
-            XDEBUG_MODE: "${XDEBUG_MODE:-off}"
+            XDEBUG_MODE: '${XDEBUG_MODE:-off}'
             RERANK_SERVICE_URL: http://rerank:8000
         extra_hosts:
             - host.docker.internal:host-gateway
@@ -58,7 +53,9 @@ services:
             - db
             - cache
     node:
-        <<: *php-build
+        build:
+            dockerfile: ./php/Dockerfile
+            target: node_dev
         working_dir: /var/www/html
         volumes:
             - /var/www/html/vendor
