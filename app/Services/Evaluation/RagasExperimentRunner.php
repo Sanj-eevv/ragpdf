@@ -246,6 +246,23 @@ class RagasExperimentRunner
     }
 
     /**
+     * Batch callbacks are serialized and run later by the queue, so this
+     * takes a run ID rather than a captured model instance (per Laravel's
+     * own warning about batch closures) and re-fetches the run fresh rather
+     * than trusting anything captured in the closure.
+     */
+    public function finalizeRun(int $runId): void
+    {
+        $run = RagasEvaluationRun::query()->find($runId);
+
+        if (! $run || $run->status === EvaluationRunStatus::Cancelled) {
+            return;
+        }
+
+        $this->refreshResults($run);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function buildRow(Query $query): array

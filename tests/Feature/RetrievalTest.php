@@ -96,6 +96,38 @@ test('hybrid retriever fuses dense and lexical rankings via RRF', function () {
     expect($results->pluck('id')->all())->toBe([$both->id, $sparseOnly->id, $denseOnly->id]);
 });
 
+test('hybrid retriever still finds lexical matches when the question is a full natural-language sentence', function () {
+    $document = Document::factory()->create();
+
+    // Weakest dense match, but the only chunk that lexically matches the
+    // question at all. Regression test: plainto_tsquery used to AND every
+    // word of the question together, so a full sentence practically never
+    // matched any chunk, the sparse leg of RRF silently contributed
+    // nothing, and hybrid search collapsed to exactly dense search.
+    $lexicalOnly = DocumentChunk::factory()->for($document)->create([
+        'chunking_strategy' => ChunkingStrategy::Tokens500,
+        'embedding' => vectorWith(0.0, 1.0),
+        'content' => 'Livewire lets you build reactive components without writing JavaScript.',
+    ]);
+
+    $denseOnly = DocumentChunk::factory()->for($document)->create([
+        'chunking_strategy' => ChunkingStrategy::Tokens500,
+        'embedding' => vectorWith(1.0),
+        'content' => 'completely unrelated financial audit guidelines',
+    ]);
+
+    Http::fake(['*/embed' => Http::response(['embeddings' => [vectorWith(1.0)]])]);
+
+    $question = 'How does Laravel Livewire let you build reactive components without writing JavaScript?';
+
+    $dense = app(DenseRetriever::class)->search($question, ChunkingStrategy::Tokens500, $document->id);
+    $hybrid = app(HybridRetriever::class)->search($question, ChunkingStrategy::Tokens500, $document->id);
+
+    expect($dense->pluck('id')->all())->toBe([$denseOnly->id, $lexicalOnly->id])
+        ->and($hybrid->pluck('id')->all())->not->toBe($dense->pluck('id')->all())
+        ->and($hybrid->first()->id)->toBe($lexicalOnly->id);
+});
+
 test('retrieval service dispatches to the retriever matching the requested algorithm', function () {
     $document = Document::factory()->create();
 

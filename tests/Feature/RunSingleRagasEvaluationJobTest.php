@@ -30,10 +30,10 @@ beforeEach(function () {
         ]),
     ]);
     RagAnswerAgent::fake(['Antibiotics and rest.']);
-    ContextPrecisionJudge::fake([['score' => 0.8, 'reasoning' => 'ok']]);
-    ContextRecallJudge::fake([['score' => 0.9, 'missing_facts' => []]]);
-    FaithfulnessJudge::fake([['score' => 1.0, 'unsupported_claims' => []]]);
-    AnswerRelevanceJudge::fake([['score' => 0.7, 'reasoning' => 'ok']]);
+    ContextPrecisionJudge::fake([['verdicts' => [['rank' => 0, 'relevant' => true, 'reason' => 'ok']]]]);
+    ContextRecallJudge::fake([['statements' => [['statement' => 'x', 'attributed' => true, 'reason' => 'ok']]]]);
+    FaithfulnessJudge::fake([['claims' => []]]);
+    AnswerRelevanceJudge::fake([['requirements' => [['requirement' => 'x', 'addressed' => true, 'reason' => 'ok']]]]);
 });
 
 function makeRagasJob(RagasEvaluationRun $run, Document $document, string $question = 'How is pneumonia treated?', ?string $groundTruth = 'Antibiotics and rest.'): RunSingleRagasEvaluationJob
@@ -68,7 +68,7 @@ test('the job evaluates its one question/config unit, tags the query with the ru
     expect($query->ragas_evaluation_run_id)->toBe($run->id)
         ->and($query->ground_truth_answer)->toBe('Antibiotics and rest.')
         ->and($query->ragasEvaluation)->not->toBeNull()
-        ->and($query->ragasEvaluation->context_precision)->toBe(0.8);
+        ->and($query->ragasEvaluation->context_precision)->toBe(1.0);
 });
 
 test('the job does nothing when its batch has already been cancelled', function () {

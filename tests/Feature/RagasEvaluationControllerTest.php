@@ -89,7 +89,7 @@ test('index renders an empty question list when the dataset file is missing', fu
 });
 
 test('store dispatches one batched job per question x config unit, skipping questions with no ready document', function () {
-    Bus::fake();
+    Bus::fake([RunSingleRagasEvaluationJob::class]);
 
     Document::factory()->create(['original_filename' => 'test-doc.pdf', 'status' => DocumentStatus::Ready]);
 
@@ -112,7 +112,7 @@ test('store dispatches one batched job per question x config unit, skipping ques
 });
 
 test('store staggers each dispatched unit job by 5 seconds so they are not all released at once', function () {
-    Bus::fake();
+    Bus::fake([RunSingleRagasEvaluationJob::class]);
 
     Document::factory()->create(['original_filename' => 'test-doc.pdf', 'status' => DocumentStatus::Ready]);
 
@@ -139,7 +139,7 @@ test('store staggers each dispatched unit job by 5 seconds so they are not all r
 });
 
 test('store completes immediately with an empty summary when nothing in the dataset matches a ready document', function () {
-    Bus::fake();
+    Bus::fake([RunSingleRagasEvaluationJob::class]);
 
     $response = $this->post(route('evaluation.store'));
 

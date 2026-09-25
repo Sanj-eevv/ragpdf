@@ -41,15 +41,27 @@ class HybridRetriever
     }
 
     /**
+     * plainto_tsquery ANDs together every significant word in the question,
+     * so it requires one chunk to contain every word of a full
+     * natural-language question at once — that almost never happens, which
+     * silently collapsed this leg to zero results (and therefore collapsed
+     * hybrid search to exactly dense search, since RRF over dense + an empty
+     * list just reproduces the dense ranking). Rebuilding it as an OR query
+     * — any significant word matching is enough to be a lexical candidate —
+     * keeps plainto_tsquery's stemming/stopword handling but fixes the
+     * all-or-nothing matching.
+     *
      * @return Collection<int, DocumentChunk>
      */
     private function lexicalSearch(string $question, ChunkingStrategy $strategy, ?int $documentId, int $limit): Collection
     {
+        $tsQuery = "regexp_replace(plainto_tsquery('english', ?)::text, ' & ', ' | ', 'g')::tsquery";
+
         return DocumentChunk::query()
             ->where('chunking_strategy', $strategy)
             ->when($documentId, fn ($query) => $query->where('document_id', $documentId))
-            ->whereFullText('content', $question)
-            ->orderByRaw("ts_rank(to_tsvector('english', content), plainto_tsquery('english', ?)) DESC", [$question])
+            ->whereRaw("to_tsvector('english', content) @@ {$tsQuery}", [$question])
+            ->orderByRaw("ts_rank(to_tsvector('english', content), {$tsQuery}) DESC", [$question])
             ->limit($limit)
             ->get();
     }

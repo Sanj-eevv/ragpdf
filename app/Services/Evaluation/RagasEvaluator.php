@@ -50,10 +50,10 @@ class RagasEvaluator
 
         return RagasEvaluation::query()->create([
             'query_id' => $query->id,
-            'context_precision' => $this->score($contextPrecision),
-            'context_recall' => $contextRecall === null ? null : $this->score($contextRecall),
-            'faithfulness' => $this->score($faithfulness),
-            'answer_relevance' => $this->score($answerRelevance),
+            'context_precision' => $this->contextPrecisionScore($contextPrecision),
+            'context_recall' => $contextRecall === null ? null : $this->ratioScore($contextRecall, 'statements', 'attributed'),
+            'faithfulness' => $this->ratioScore($faithfulness, 'claims', 'supported'),
+            'answer_relevance' => $this->ratioScore($answerRelevance, 'requirements', 'addressed'),
             'judge_model' => self::MODEL,
             'raw_judge_response' => [
                 'context_precision' => $this->structured($contextPrecision)->toArray(),
@@ -78,9 +78,56 @@ class RagasEvaluator
         return $response;
     }
 
-    private function score(AgentResponse $response): float
+    /**
+     * RAGAS Context Precision = Average Precision over the judge's per-chunk
+     * relevant/not-relevant verdicts: for every chunk verdicted relevant,
+     * take precision@k at that chunk's position, then average those
+     * precision@k values over the relevant chunks. This rewards relevant
+     * chunks being ranked higher over the exact same chunks ranked lower,
+     * unlike a flat relevant/total ratio.
+     */
+    private function contextPrecisionScore(AgentResponse $response): float
     {
-        return (float) $this->structured($response)['score'];
+        $verdicts = $this->structured($response)['verdicts'];
+
+        $relevantCount = 0;
+        $precisionSum = 0.0;
+
+        foreach (array_values($verdicts) as $index => $verdict) {
+            if (! $verdict['relevant']) {
+                continue;
+            }
+
+            $relevantCount++;
+            $precisionSum += $relevantCount / ($index + 1);
+        }
+
+        return $relevantCount === 0 ? 0.0 : $precisionSum / $relevantCount;
+    }
+
+    /**
+     * Shared by context recall, faithfulness, and answer relevance: each
+     * judge decomposes its input into discrete, independently verifiable
+     * items and returns a boolean verdict per item rather than a single
+     * float chosen freehand. The score is then a deterministic ratio over
+     * those verdicts — positive/total — instead of a number the model
+     * estimated itself, which is both the actual RAGAS methodology and far
+     * more consistent run to run. An empty item list (e.g. an answer with
+     * no factual claims) scores 1.0 — vacuously true, nothing was
+     * unsupported.
+     *
+     * @param  'statements'|'claims'|'requirements'  $itemsKey
+     * @param  'attributed'|'supported'|'addressed'  $verdictKey
+     */
+    private function ratioScore(AgentResponse $response, string $itemsKey, string $verdictKey): float
+    {
+        $items = new Collection($this->structured($response)[$itemsKey]);
+
+        if ($items->isEmpty()) {
+            return 1.0;
+        }
+
+        return $items->filter(fn (array $item) => $item[$verdictKey])->count() / $items->count();
     }
 
     /**

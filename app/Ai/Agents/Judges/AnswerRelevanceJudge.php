@@ -12,6 +12,11 @@ use Stringable;
  * RAGAS Answer Relevance: judges whether the final answer actually
  * addresses the user's question — preventing a generator from being scored
  * well just for producing factually correct but tangential text.
+ *
+ * Decomposition + per-requirement verdicts (rather than a single freehand
+ * score) keeps this consistent with the other three judges and is far more
+ * reproducible run to run — RagasEvaluator computes the score as
+ * addressed/total over these discrete verdicts.
  */
 class AnswerRelevanceJudge implements Agent, HasStructuredOutput
 {
@@ -21,24 +26,32 @@ class AnswerRelevanceJudge implements Agent, HasStructuredOutput
     {
         return 'You are a relevance judge for a Retrieval-Augmented Generation system.
 
-You will be given a question and a generated answer. Determine whether the answer
-directly addresses what was asked, regardless of whether the answer is factually
-correct. An answer that is factually accurate but doesn\'t actually address the
-question should score low. An answer of exactly "Information Not Found" is relevant
-(score 1.0) if it is a reasonable response to the question given no supporting
-context was available.
+You will be given a question and a generated answer. First, break the question
+down into the distinct informational requirements a fully relevant answer would
+need to satisfy (what is it actually asking for?) — usually just one requirement,
+occasionally more for a compound question. For EVERY requirement, decide whether
+the answer addresses it, regardless of whether the answer is factually correct: an
+answer that is factually accurate but doesn\'t actually address the question fails
+that requirement.
 
-Score from 0.0 (completely fails to address the question) to 1.0 (directly and
-fully addresses the question).';
+Be strict and binary — do not report a fuzzy score. An answer of exactly
+"Information Not Found" satisfies its single requirement ("acknowledge that no
+supporting information is available") when no supporting context was available.';
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
-            'score' => $schema->number()->min(0)->max(1)->required()
-                ->description('Answer relevance score from 0.0 to 1.0'),
-            'reasoning' => $schema->string()->required()
-                ->description('Brief explanation of whether the answer addresses the question'),
+            'requirements' => $schema->array()->items(
+                $schema->object([
+                    'requirement' => $schema->string()->required()
+                        ->description('One distinct informational requirement the question is asking for'),
+                    'addressed' => $schema->boolean()->required()
+                        ->description('Whether the generated answer addresses this requirement'),
+                    'reason' => $schema->string()->required()
+                        ->description('One sentence justifying the verdict'),
+                ])
+            )->required()->description('Every distinct informational requirement of the question, each with its own addressed verdict'),
         ];
     }
 }

@@ -434,7 +434,7 @@ function formatNumber(value: number | null | undefined): string {
                     <div class="flex flex-col gap-1.5">
                         <Label>Question</Label>
                         <Select v-model="selectedQuestion">
-                            <SelectTrigger class="w-full sm:w-[32rem]">
+                            <SelectTrigger class="w-full">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

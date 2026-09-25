@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\EvaluationRunStatus;
-use App\Jobs\RunSingleRagasEvaluationJob;
+use App\Jobs\BuildRagasEvaluationRunJob;
 use App\Models\RagasEvaluationRun;
 use App\Services\Evaluation\RagasExperimentRunner;
 use Illuminate\Http\RedirectResponse;
@@ -16,8 +16,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RagasEvaluationController extends Controller
 {
-    private const int UNIT_DISPATCH_DELAY_SECONDS = 5;
-
     public function index(RagasExperimentRunner $runner): Response
     {
         try {
@@ -53,70 +51,16 @@ class RagasEvaluationController extends Controller
             return back()->withErrors(['evaluation' => $e->getMessage()]);
         }
 
-        $configs = RagasExperimentRunner::allConfigs();
-
-        $units = [];
-
-        foreach ($questions as $entry) {
-            try {
-                $document = $runner->resolveDocument($entry);
-            } catch (RuntimeException $e) {
-                return back()->withErrors(['evaluation' => $e->getMessage()]);
-            }
-
-            if (! $document) {
-                continue;
-            }
-
-            foreach ($configs as $config) {
-                $units[] = [$document, $entry, $config];
-            }
-        }
-
-        if ($units === []) {
-            RagasEvaluationRun::query()->create([
-                'status' => EvaluationRunStatus::Completed,
-                'total' => 0,
-                'summary' => [],
-            ]);
-
-            return to_route('evaluation.index');
-        }
-
         $run = RagasEvaluationRun::query()->create([
             'status' => EvaluationRunStatus::Queued,
-            'total' => count($units),
         ]);
 
-        // Staggered by index so units don't all hit the embedding/rerank
-        // sidecar and the Gemini API at the same instant — each unit becomes
-        // available 5s after the previous one rather than all at once.
-        $jobs = array_map(fn (array $unit, int $index) => (new RunSingleRagasEvaluationJob(
-            $run,
-            $unit[0]->id,
-            (string) $unit[1]['question'],
-            $unit[1]['ground_truth_answer'] ?? null,
-            $unit[2]['strategy'],
-            $unit[2]['algorithm'],
-            $unit[2]['reranked'],
-        ))->delay(now()->addSeconds($index * self::UNIT_DISPATCH_DELAY_SECONDS)), $units, array_keys($units));
-
-        $runId = $run->id;
-
-        // One job per question x config unit (not one job for the whole
-        // matrix) — so a 50-question x 8-config run can't blow Horizon's
-        // 60s job timeout, workers can process units in parallel, and
-        // allowFailures() means one bad unit doesn't cancel the rest (by
-        // default Laravel cancels the whole batch on the first failure).
-        $batch = Bus::batch($jobs)
-            ->allowFailures()
-            ->name("ragas-evaluation-run-{$runId}")
-            ->finally(function () use ($runId) {
-                self::finalize($runId);
-            })
-            ->dispatch();
-
-        $run->update(['status' => EvaluationRunStatus::Running, 'batch_id' => $batch->id]);
+        // Resolving each entry's Document (and dispatching the per-unit
+        // evaluation batch once they're ready) happens in a queued job, not
+        // here — resolveDocument() can trigger a full extract/chunk/embed
+        // ingestion for dataset entries seen for the first time, which is
+        // too slow to run inside this request.
+        BuildRagasEvaluationRunJob::dispatch($run, $questions->all());
 
         return to_route('evaluation.index');
     }
@@ -139,22 +83,5 @@ class RagasEvaluationController extends Controller
         }
 
         return to_route('evaluation.index');
-    }
-
-    /**
-     * Batch callbacks are serialized and run later by the queue, so this is
-     * a static method rather than relying on `$this` (per Laravel's own
-     * warning about batch closures) and re-fetches everything fresh by ID
-     * rather than capturing model instances into the closure.
-     */
-    private static function finalize(int $runId): void
-    {
-        $run = RagasEvaluationRun::query()->find($runId);
-
-        if (! $run || $run->status === EvaluationRunStatus::Cancelled) {
-            return;
-        }
-
-        app(RagasExperimentRunner::class)->refreshResults($run);
     }
 }
