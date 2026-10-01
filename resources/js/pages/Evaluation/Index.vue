@@ -13,7 +13,13 @@ import { Bar } from 'vue-chartjs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -106,7 +112,13 @@ watch(
             return;
         }
 
-        if (!selectedQuestion.value || !details.some((detail: QuestionDetail) => detail.question === selectedQuestion.value)) {
+        if (
+            !selectedQuestion.value ||
+            !details.some(
+                (detail: QuestionDetail) =>
+                    detail.question === selectedQuestion.value,
+            )
+        ) {
             selectedQuestion.value = details[0].question;
         }
     },
@@ -114,24 +126,29 @@ watch(
 );
 
 const selectedDetail = computed<QuestionDetail | null>(
-    () => props.details.find((detail: QuestionDetail) => detail.question === selectedQuestion.value) ?? null,
+    () =>
+        props.details.find(
+            (detail: QuestionDetail) =>
+                detail.question === selectedQuestion.value,
+        ) ?? null,
 );
 
 defineOptions({
     layout: {
-        breadcrumbs: [
-            { title: 'Evaluation', href: '/evaluation' },
-        ],
+        breadcrumbs: [{ title: 'Evaluation', href: '/evaluation' }],
     },
 });
 
 const page = usePage();
 const evaluationError = computed(
-    () => (page.props as { errors?: { evaluation?: string } }).errors?.evaluation,
+    () =>
+        (page.props as { errors?: { evaluation?: string } }).errors?.evaluation,
 );
 
 const isActive = computed(
-    () => props.run !== null && (props.run.status === 'queued' || props.run.status === 'running'),
+    () =>
+        props.run !== null &&
+        (props.run.status === 'queued' || props.run.status === 'running'),
 );
 
 const { start: startPolling, stop: stopPolling } = usePoll(
@@ -140,7 +157,9 @@ const { start: startPolling, stop: stopPolling } = usePoll(
     { autoStart: false },
 );
 
-watch(isActive, (active) => (active ? startPolling() : stopPolling()), { immediate: true });
+watch(isActive, (active) => (active ? startPolling() : stopPolling()), {
+    immediate: true,
+});
 
 function runEvaluation() {
     router.post(store().url, {}, { preserveScroll: true });
@@ -154,7 +173,10 @@ function cancelEvaluation() {
     router.post(cancel(props.run.id).url, {}, { preserveScroll: true });
 }
 
-const statusVariant: Record<RunStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const statusVariant: Record<
+    RunStatus,
+    'default' | 'secondary' | 'destructive' | 'outline'
+> = {
     queued: 'outline',
     running: 'secondary',
     completed: 'default',
@@ -179,7 +201,9 @@ const SERIES_COLORS = {
 } as const;
 
 const { resolvedAppearance } = useAppearance();
-const seriesColors = computed(() => SERIES_COLORS[resolvedAppearance.value as 'light' | 'dark']);
+const seriesColors = computed(
+    () => SERIES_COLORS[resolvedAppearance.value as 'light' | 'dark'],
+);
 
 // The raw config_id (e.g. "tokens_500_dense_no_rerank") is precise and used
 // as-is elsewhere (table cells, keys) — but reads poorly as a chart axis
@@ -193,11 +217,15 @@ const chartData = computed(() => {
     const configs = selectedDetail.value?.configs ?? [];
 
     return {
-        labels: configs.map((config: QuestionDetailConfig) => formatConfigLabel(config.config_id)),
+        labels: configs.map((config: QuestionDetailConfig) =>
+            formatConfigLabel(config.config_id),
+        ),
         datasets: METRICS.map((metric, index) => ({
             label: metric.label,
             backgroundColor: seriesColors.value[index],
-            data: configs.map((config: QuestionDetailConfig) => config[metric.key]),
+            data: configs.map(
+                (config: QuestionDetailConfig) => config[metric.key],
+            ),
         })),
     };
 });
@@ -218,7 +246,7 @@ const chartOptions = {
     },
 };
 
-const BASELINE_CONFIG_ID = 'tokens_500_dense_no_rerank';
+const BASELINE_CONFIG_ID = 'tokens_1000_dense_no_rerank';
 
 const COMPARISON_ROWS = [
     { key: 'context_precision', label: 'Context Precision', kind: 'score' },
@@ -234,7 +262,9 @@ function meanScore(config: ConfigSummary): number | null {
         (value): value is number => value != null,
     );
 
-    return values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length;
+    return values.length === 0
+        ? null
+        : values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 const comparison = computed(() => {
@@ -244,7 +274,9 @@ const comparison = computed(() => {
         return null;
     }
 
-    const baseline = summary.find((config: ConfigSummary) => config.config_id === BASELINE_CONFIG_ID);
+    const baseline = summary.find(
+        (config: ConfigSummary) => config.config_id === BASELINE_CONFIG_ID,
+    );
 
     if (!baseline) {
         return null;
@@ -267,7 +299,10 @@ const comparison = computed(() => {
     return best ? { baseline, best: best.config } : null;
 });
 
-function delta(baselineValue: number | null | undefined, bestValue: number | null | undefined): string {
+function delta(
+    baselineValue: number | null | undefined,
+    bestValue: number | null | undefined,
+): string {
     if (baselineValue == null || bestValue == null) {
         return '—';
     }
@@ -278,7 +313,10 @@ function delta(baselineValue: number | null | undefined, bestValue: number | nul
     return `${sign}${Math.abs(diff).toFixed(3)}`;
 }
 
-function numberDelta(baselineValue: number | null | undefined, bestValue: number | null | undefined): string {
+function numberDelta(
+    baselineValue: number | null | undefined,
+    bestValue: number | null | undefined,
+): string {
     if (baselineValue == null || bestValue == null) {
         return '—';
     }
@@ -289,8 +327,15 @@ function numberDelta(baselineValue: number | null | undefined, bestValue: number
     return `${sign}${Math.abs(diff)}`;
 }
 
-function deltaClass(baselineValue: number | null | undefined, bestValue: number | null | undefined): string {
-    if (baselineValue == null || bestValue == null || bestValue === baselineValue) {
+function deltaClass(
+    baselineValue: number | null | undefined,
+    bestValue: number | null | undefined,
+): string {
+    if (
+        baselineValue == null ||
+        bestValue == null ||
+        bestValue === baselineValue
+    ) {
         return 'text-muted-foreground';
     }
 
@@ -314,15 +359,17 @@ function formatNumber(value: number | null | undefined): string {
 <template>
     <Head title="Evaluation" />
 
-    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+    <div
+        class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
+    >
         <Card>
             <CardHeader>
                 <CardTitle>RAGAS Evaluation</CardTitle>
                 <CardDescription>
-                    Runs every question in the curated dataset through all 8 chunking
-                    &times; retrieval &times; rerank configurations, scored by the RAGAS
-                    judge. This runs in the background — you can navigate away and come
-                    back.
+                    Runs every question in the curated dataset through all 8
+                    chunking &times; retrieval &times; rerank configurations,
+                    scored by the RAGAS judge. This runs in the background — you
+                    can navigate away and come back.
                 </CardDescription>
             </CardHeader>
             <CardContent class="flex flex-col gap-3">
@@ -334,45 +381,73 @@ function formatNumber(value: number | null | undefined): string {
                     <Button :disabled="isActive" @click="runEvaluation">
                         {{ isActive ? 'Running…' : 'Run Evaluation' }}
                     </Button>
-                    <Button v-if="isActive" variant="destructive" @click="cancelEvaluation">
+                    <Button
+                        v-if="isActive"
+                        variant="destructive"
+                        @click="cancelEvaluation"
+                    >
                         Stop
                     </Button>
-                    <Badge v-if="run" :variant="statusVariant[run.status]">{{ run.status }}</Badge>
+                    <Badge v-if="run" :variant="statusVariant[run.status]">{{
+                        run.status
+                    }}</Badge>
                     <button
                         type="button"
                         class="text-sm text-muted-foreground underline"
                         @click="showQuestions = !showQuestions"
                     >
-                        {{ showQuestions ? 'Hide' : 'Show' }} dataset questions ({{ questions.length }})
+                        {{ showQuestions ? 'Hide' : 'Show' }} dataset questions
+                        ({{ questions.length }})
                     </button>
                 </div>
 
-                <div v-if="showQuestions" class="overflow-x-auto rounded-md border">
+                <div
+                    v-if="showQuestions"
+                    class="overflow-x-auto rounded-md border"
+                >
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="border-b text-left text-muted-foreground">
-                                <th class="py-2 px-3 font-medium">Question</th>
-                                <th class="py-2 px-3 font-medium">Answerable</th>
-                                <th class="py-2 px-3 font-medium">Ground truth answer</th>
+                            <tr
+                                class="border-b text-left text-muted-foreground"
+                            >
+                                <th class="px-3 py-2 font-medium">Question</th>
+                                <th class="px-3 py-2 font-medium">
+                                    Answerable
+                                </th>
+                                <th class="px-3 py-2 font-medium">
+                                    Ground truth answer
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr
                                 v-for="(item, index) in questions"
                                 :key="index"
-                                class="border-b last:border-0 align-top"
+                                class="border-b align-top last:border-0"
                             >
-                                <td class="py-2 px-3">{{ item.question }}</td>
-                                <td class="py-2 px-3">
-                                    <Badge :variant="item.answerable ? 'default' : 'outline'">
+                                <td class="px-3 py-2">{{ item.question }}</td>
+                                <td class="px-3 py-2">
+                                    <Badge
+                                        :variant="
+                                            item.answerable
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                    >
                                         {{ item.answerable ? 'yes' : 'no' }}
                                     </Badge>
                                 </td>
-                                <td class="py-2 px-3 text-muted-foreground">{{ item.ground_truth_answer ?? '—' }}</td>
+                                <td class="px-3 py-2 text-muted-foreground">
+                                    {{ item.ground_truth_answer ?? '—' }}
+                                </td>
                             </tr>
                             <tr v-if="questions.length === 0">
-                                <td colspan="3" class="py-3 px-3 text-center text-muted-foreground">
-                                    No dataset loaded — check `services.ragas.dataset_path`.
+                                <td
+                                    colspan="3"
+                                    class="px-3 py-3 text-center text-muted-foreground"
+                                >
+                                    No dataset loaded — check
+                                    `services.ragas.dataset_path`.
                                 </td>
                             </tr>
                         </tbody>
@@ -386,32 +461,46 @@ function formatNumber(value: number | null | undefined): string {
                         class="w-full max-w-md"
                     ></progress>
                     <p class="text-sm text-muted-foreground">
-                        {{ run.completed }} / {{ run.total }} question-configs evaluated
+                        {{ run.completed }} / {{ run.total }} question-configs
+                        evaluated
                     </p>
                 </div>
 
-                <Alert v-if="run && run.status === 'failed'" variant="destructive">
+                <Alert
+                    v-if="run && run.status === 'failed'"
+                    variant="destructive"
+                >
                     <AlertTitle>Evaluation run failed</AlertTitle>
                     <AlertDescription>{{ run.error_message }}</AlertDescription>
                 </Alert>
 
                 <p
-                    v-if="run && run.status === 'completed' && run.error_message"
+                    v-if="
+                        run && run.status === 'completed' && run.error_message
+                    "
                     class="text-sm text-muted-foreground"
                 >
                     {{ run.error_message }}
                 </p>
 
-                <p v-if="run && run.status === 'cancelled'" class="text-sm text-muted-foreground">
-                    Evaluation stopped at {{ run.completed }} / {{ run.total }} question-configs.
-                    Start a new run whenever you're ready.
+                <p
+                    v-if="run && run.status === 'cancelled'"
+                    class="text-sm text-muted-foreground"
+                >
+                    Evaluation stopped at {{ run.completed }} /
+                    {{ run.total }} question-configs. Start a new run whenever
+                    you're ready.
                 </p>
 
                 <p v-if="!run" class="text-sm text-muted-foreground">
                     No evaluation has been run yet.
                 </p>
                 <p
-                    v-if="run && run.status === 'completed' && (!run.summary || run.summary.length === 0)"
+                    v-if="
+                        run &&
+                        run.status === 'completed' &&
+                        (!run.summary || run.summary.length === 0)
+                    "
                     class="text-sm text-muted-foreground"
                 >
                     Completed, but nothing was evaluated — none of the dataset's
@@ -420,14 +509,22 @@ function formatNumber(value: number | null | undefined): string {
             </CardContent>
         </Card>
 
-        <template v-if="run && run.status === 'completed' && run.summary && run.summary.length > 0">
+        <template
+            v-if="
+                run &&
+                run.status === 'completed' &&
+                run.summary &&
+                run.summary.length > 0
+            "
+        >
             <Card v-if="selectedDetail">
                 <CardHeader>
                     <CardTitle>RAGAS scores by question</CardTitle>
                     <CardDescription>
-                        Compare all 8 configurations for one question at a time — an
-                        average across the whole dataset hides exactly this kind of
-                        detail (e.g. did it correctly say "Information Not Found"?).
+                        Compare all 8 configurations for one question at a time
+                        — an average across the whole dataset hides exactly this
+                        kind of detail (e.g. did it correctly say "Information
+                        Not Found"?).
                     </CardDescription>
                 </CardHeader>
                 <CardContent class="flex flex-col gap-4">
@@ -448,40 +545,94 @@ function formatNumber(value: number | null | undefined): string {
                             </SelectContent>
                         </Select>
                         <p class="text-sm text-muted-foreground">
-                            <span class="font-medium">Ground truth answer:</span>
+                            <span class="font-medium"
+                                >Ground truth answer:</span
+                            >
                             {{ selectedDetail.ground_truth_answer ?? '—' }}
                         </p>
                     </div>
 
                     <div class="h-80">
-                        <Bar v-if="isMounted" :data="chartData" :options="chartOptions" />
+                        <Bar
+                            v-if="isMounted"
+                            :data="chartData"
+                            :options="chartOptions"
+                        />
                         <Skeleton v-else class="h-full w-full" />
                     </div>
 
                     <div class="overflow-x-auto rounded-md border">
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="border-b text-left text-muted-foreground">
-                                    <th class="py-2 px-3 font-medium">Config</th>
-                                    <th class="py-2 px-3 font-medium">Answer</th>
-                                    <th class="py-2 px-3 font-medium">Ctx Precision</th>
-                                    <th class="py-2 px-3 font-medium">Ctx Recall</th>
-                                    <th class="py-2 px-3 font-medium">Faithfulness</th>
-                                    <th class="py-2 px-3 font-medium">Answer Relevance</th>
+                                <tr
+                                    class="border-b text-left text-muted-foreground"
+                                >
+                                    <th class="px-3 py-2 font-medium">
+                                        Config
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Answer
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Ctx Precision
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Ctx Recall
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Faithfulness
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Answer Relevance
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Latency (ms)
+                                    </th>
+                                    <th class="px-3 py-2 font-medium">
+                                        Tokens
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr
                                     v-for="config in selectedDetail.configs"
                                     :key="config.config_id"
-                                    class="border-b last:border-0 align-top"
+                                    class="border-b align-top last:border-0"
                                 >
-                                    <td class="py-2 px-3 font-mono text-xs whitespace-nowrap">{{ formatConfigLabel(config.config_id) }}</td>
-                                    <td class="py-2 px-3">{{ config.answer ?? '—' }}</td>
-                                    <td class="py-2 px-3">{{ formatScore(config.context_precision) }}</td>
-                                    <td class="py-2 px-3">{{ formatScore(config.context_recall) }}</td>
-                                    <td class="py-2 px-3">{{ formatScore(config.faithfulness) }}</td>
-                                    <td class="py-2 px-3">{{ formatScore(config.answer_relevance) }}</td>
+                                    <td
+                                        class="px-3 py-2 font-mono text-xs whitespace-nowrap"
+                                    >
+                                        {{
+                                            formatConfigLabel(config.config_id)
+                                        }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{ config.answer ?? '—' }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{
+                                            formatScore(
+                                                config.context_precision,
+                                            )
+                                        }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{ formatScore(config.context_recall) }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{ formatScore(config.faithfulness) }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{
+                                            formatScore(config.answer_relevance)
+                                        }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{ formatNumber(config.latency_ms) }}
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        {{ config.prompt_tokens }}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -493,18 +644,29 @@ function formatNumber(value: number | null | undefined): string {
                 <CardHeader>
                     <CardTitle>Baseline vs Best</CardTitle>
                     <CardDescription>
-                        Naive baseline (<span class="font-mono text-xs">{{ formatConfigLabel(comparison.baseline.config_id) }}</span>)
-                        vs the best-performing config by average RAGAS score
-                        (<span class="font-mono text-xs">{{ formatConfigLabel(comparison.best.config_id) }}</span>).
+                        Naive baseline (<span class="font-mono text-xs">{{
+                            formatConfigLabel(comparison.baseline.config_id)
+                        }}</span
+                        >) vs the best-performing config by average RAGAS score
+                        (<span class="font-mono text-xs">{{
+                            formatConfigLabel(comparison.best.config_id)
+                        }}</span
+                        >).
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="border-b text-left text-muted-foreground">
-                                    <th class="py-2 pr-4 font-medium">Metric</th>
-                                    <th class="py-2 pr-4 font-medium">Baseline</th>
+                                <tr
+                                    class="border-b text-left text-muted-foreground"
+                                >
+                                    <th class="py-2 pr-4 font-medium">
+                                        Metric
+                                    </th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Baseline
+                                    </th>
                                     <th class="py-2 pr-4 font-medium">Best</th>
                                     <th class="py-2 pr-4 font-medium">Δ</th>
                                 </tr>
@@ -519,25 +681,56 @@ function formatNumber(value: number | null | undefined): string {
                                     <td class="py-2 pr-4">
                                         {{
                                             row.kind === 'score'
-                                                ? formatScore(comparison.baseline[row.key])
-                                                : formatNumber(comparison.baseline[row.key])
+                                                ? formatScore(
+                                                      comparison.baseline[
+                                                          row.key
+                                                      ],
+                                                  )
+                                                : formatNumber(
+                                                      comparison.baseline[
+                                                          row.key
+                                                      ],
+                                                  )
                                         }}
                                     </td>
                                     <td class="py-2 pr-4">
                                         {{
                                             row.kind === 'score'
-                                                ? formatScore(comparison.best[row.key])
-                                                : formatNumber(comparison.best[row.key])
+                                                ? formatScore(
+                                                      comparison.best[row.key],
+                                                  )
+                                                : formatNumber(
+                                                      comparison.best[row.key],
+                                                  )
                                         }}
                                     </td>
                                     <td
                                         class="py-2 pr-4"
-                                        :class="row.kind === 'score' ? deltaClass(comparison.baseline[row.key], comparison.best[row.key]) : 'text-muted-foreground'"
+                                        :class="
+                                            row.kind === 'score'
+                                                ? deltaClass(
+                                                      comparison.baseline[
+                                                          row.key
+                                                      ],
+                                                      comparison.best[row.key],
+                                                  )
+                                                : 'text-muted-foreground'
+                                        "
                                     >
                                         {{
                                             row.kind === 'score'
-                                                ? delta(comparison.baseline[row.key], comparison.best[row.key])
-                                                : numberDelta(comparison.baseline[row.key], comparison.best[row.key])
+                                                ? delta(
+                                                      comparison.baseline[
+                                                          row.key
+                                                      ],
+                                                      comparison.best[row.key],
+                                                  )
+                                                : numberDelta(
+                                                      comparison.baseline[
+                                                          row.key
+                                                      ],
+                                                      comparison.best[row.key],
+                                                  )
                                         }}
                                     </td>
                                 </tr>
@@ -555,15 +748,31 @@ function formatNumber(value: number | null | undefined): string {
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="border-b text-left text-muted-foreground">
-                                    <th class="py-2 pr-4 font-medium">Config</th>
+                                <tr
+                                    class="border-b text-left text-muted-foreground"
+                                >
+                                    <th class="py-2 pr-4 font-medium">
+                                        Config
+                                    </th>
                                     <th class="py-2 pr-4 font-medium">N</th>
-                                    <th class="py-2 pr-4 font-medium">Ctx Precision</th>
-                                    <th class="py-2 pr-4 font-medium">Ctx Recall</th>
-                                    <th class="py-2 pr-4 font-medium">Faithfulness</th>
-                                    <th class="py-2 pr-4 font-medium">Answer Relevance</th>
-                                    <th class="py-2 pr-4 font-medium">Avg Latency (ms)</th>
-                                    <th class="py-2 pr-4 font-medium">Avg Tokens</th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Ctx Precision
+                                    </th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Ctx Recall
+                                    </th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Faithfulness
+                                    </th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Answer Relevance
+                                    </th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Avg Latency (ms)
+                                    </th>
+                                    <th class="py-2 pr-4 font-medium">
+                                        Avg Tokens
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -572,20 +781,49 @@ function formatNumber(value: number | null | undefined): string {
                                     :key="config.config_id"
                                     class="border-b last:border-0"
                                 >
-                                    <td class="py-2 pr-4 font-mono text-xs">{{ formatConfigLabel(config.config_id) }}</td>
+                                    <td class="py-2 pr-4 font-mono text-xs">
+                                        {{
+                                            formatConfigLabel(config.config_id)
+                                        }}
+                                    </td>
                                     <td class="py-2 pr-4">{{ config.n }}</td>
-                                    <td class="py-2 pr-4">{{ formatScore(config.context_precision) }}</td>
-                                    <td class="py-2 pr-4">{{ formatScore(config.context_recall) }}</td>
-                                    <td class="py-2 pr-4">{{ formatScore(config.faithfulness) }}</td>
-                                    <td class="py-2 pr-4">{{ formatScore(config.answer_relevance) }}</td>
-                                    <td class="py-2 pr-4">{{ formatNumber(config.avg_latency_ms) }}</td>
-                                    <td class="py-2 pr-4">{{ formatNumber(config.avg_tokens) }}</td>
+                                    <td class="py-2 pr-4">
+                                        {{
+                                            formatScore(
+                                                config.context_precision,
+                                            )
+                                        }}
+                                    </td>
+                                    <td class="py-2 pr-4">
+                                        {{ formatScore(config.context_recall) }}
+                                    </td>
+                                    <td class="py-2 pr-4">
+                                        {{ formatScore(config.faithfulness) }}
+                                    </td>
+                                    <td class="py-2 pr-4">
+                                        {{
+                                            formatScore(config.answer_relevance)
+                                        }}
+                                    </td>
+                                    <td class="py-2 pr-4">
+                                        {{
+                                            formatNumber(config.avg_latency_ms)
+                                        }}
+                                    </td>
+                                    <td class="py-2 pr-4">
+                                        {{ formatNumber(config.avg_tokens) }}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
-                    <Button v-if="run.csv_path" variant="outline" class="mt-4" as-child>
+                    <Button
+                        v-if="run.csv_path"
+                        variant="outline"
+                        class="mt-4"
+                        as-child
+                    >
                         <a :href="download(run.id).url">Download raw CSV</a>
                     </Button>
                 </CardContent>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EvaluationRunStatus;
 use App\Jobs\BuildRagasEvaluationRunJob;
+use App\Models\Query;
 use App\Models\RagasEvaluationRun;
 use App\Services\Evaluation\RagasExperimentRunner;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +26,7 @@ class RagasEvaluationController extends Controller
         }
 
         $run = RagasEvaluationRun::query()->latest()->first();
+
 
         return Inertia::render('Evaluation/Index', [
             'run' => $run,

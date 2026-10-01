@@ -147,7 +147,7 @@ class RagasExperimentRunner
         $grouped = (new Collection($rows))->groupBy('config_id');
 
         return $grouped->map(function (Collection $group, string $configId) {
-            $tokens = $group->map(fn (array $row) => $row['prompt_tokens'] + $row['completion_tokens']);
+            $tokens = $group->map(fn (array $row) => $row['prompt_tokens']);
 
             return [
                 'config_id' => $configId,
@@ -239,6 +239,7 @@ class RagasExperimentRunner
                     'latency_ms' => $row['latency_ms'],
                     'prompt_tokens' => $row['prompt_tokens'],
                     'completion_tokens' => $row['completion_tokens'],
+                    'total_tokens' => $row['prompt_tokens'] + $row['completion_tokens'],
                 ])->values()->all(),
             ])
             ->values()
